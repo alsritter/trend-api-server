@@ -14,12 +14,13 @@ async def system_health(conn: aiomysql.Connection = Depends(get_db)):
     """
     系统健康检查
 
-    检查 API Server、MySQL、Redis 状态
+    检查 API Server、MySQL、Redis、Celery 状态
     """
     health_status = {
         "api_server": "healthy",
         "mysql": "unknown",
-        "redis": "unknown"
+        "redis": "unknown",
+        "celery": "unknown"
     }
 
     # 检查 MySQL
@@ -33,10 +34,10 @@ async def system_health(conn: aiomysql.Connection = Depends(get_db)):
 
     # 检查 Redis
     try:
-        if settings.REDIS_PASSWORD:
-            redis_url = f"redis://:{settings.REDIS_PASSWORD}@{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
+        if settings.REDIS_DB_PWD:
+            redis_url = f"redis://:{settings.REDIS_DB_PWD}@{settings.REDIS_DB_HOST}:{settings.REDIS_DB_PORT}/{settings.REDIS_DB_NUM}"
         else:
-            redis_url = f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/{settings.REDIS_DB}"
+            redis_url = f"redis://{settings.REDIS_DB_HOST}:{settings.REDIS_DB_PORT}/{settings.REDIS_DB_NUM}"
 
         redis_client = await aioredis.from_url(redis_url, decode_responses=True)
         await redis_client.ping()
@@ -44,6 +45,18 @@ async def system_health(conn: aiomysql.Connection = Depends(get_db)):
         health_status["redis"] = "healthy"
     except Exception as e:
         health_status["redis"] = f"unhealthy: {str(e)}"
+
+    # 检查 Celery
+    try:
+        from app.celery_app.celery import celery_app
+        inspect = celery_app.control.inspect(timeout=1.0)
+        stats = inspect.stats()
+        if stats and len(stats) > 0:
+            health_status["celery"] = "healthy"
+        else:
+            health_status["celery"] = "unhealthy: no workers"
+    except Exception as e:
+        health_status["celery"] = f"unhealthy: {str(e)}"
 
     # 判断整体状态
     overall_healthy = all(status == "healthy" for status in health_status.values())

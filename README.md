@@ -51,18 +51,35 @@ cat .gitmodules
 
 ## 主要功能
 
+- **Web 管理界面**：基于 React + Ant Design 的前端管理系统
+  - 仪表盘：系统健康监控、数据统计图表
+  - 账号管理：爬虫账号增删改查
+  - IP 池管理：代理配置、IP 列表查看、验证
+  - 任务管理：创建任务、查看进度、停止任务
+  - 数据查看：多平台内容数据查询和筛选
 - **异步任务管理**：通过 Celery 异步执行爬虫任务，支持任务状态查询和停止
 - **账号配置管理**：通过 API 管理爬虫账号 Cookies 和状态
 - **内容查询**：查询已爬取的内容（笔记/视频）、评论、创作者信息
 - **系统监控**：监控系统健康状态、Celery 队列、数据库统计
+- **IP 代理管理**：配置和管理代理 IP 池
 
 ## 技术栈
 
+**后端**：
 - **Web 框架**：FastAPI 0.109.0
 - **异步任务队列**：Celery 5.3.4 + Redis
 - **数据库**：MySQL 8.0（共享 MediaCrawlerPro-Python 数据库）
 - **进程管理**：Supervisor
 - **容器化**：Docker + Docker Compose
+
+**前端**：
+- **框架**：React 18 + TypeScript
+- **UI 组件库**：Ant Design 5.x
+- **路由**：React Router v6
+- **状态管理**：TanStack Query (React Query) + Zustand
+- **HTTP 客户端**：Axios
+- **图表库**：ECharts
+- **构建工具**：Vite
 
 ## 支持的平台
 
@@ -125,7 +142,11 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 celery -A app.celery_app.celery worker --loglevel=info -Q crawler_queue,control_queue
 ```
 
-8. **访问 API 文档**
+8. **访问 Web 管理界面**
+
+打开浏览器访问: [http://localhost:8000](http://localhost:8000)
+
+9. **访问 API 文档**
 
 打开浏览器访问: [http://localhost:8000/docs](http://localhost:8000/docs)
 
@@ -135,19 +156,25 @@ celery -A app.celery_app.celery worker --loglevel=info -Q crawler_queue,control_
 
 ```bash
 cd trend-api-server
-docker-compose up -d
+docker build -t trend-api-server .
+# 前端会在 Docker 构建过程中自动编译并集成到镜像中
 ```
 
-2. **查看日志**
+2. **访问服务**
+
+- Web 管理界面: [http://localhost:8000](http://localhost:8000)
+- API 文档: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+3. **查看日志**
 
 ```bash
-docker-compose logs -f trend-api-server
+docker logs -f <container-id>
 ```
 
-3. **停止服务**
+4. **停止服务**
 
 ```bash
-docker-compose down
+docker stop <container-id>
 ```
 
 ## API 接口文档
@@ -186,6 +213,15 @@ docker-compose down
 - `GET /api/v1/system/health` - 系统状态
 - `GET /api/v1/system/celery/stats` - Celery 队列状态
 - `GET /api/v1/system/database/stats` - 数据库统计
+
+#### 5. IP 代理管理
+
+- `GET /api/v1/proxy/config` - 获取代理配置
+- `PUT /api/v1/proxy/config` - 更新代理配置
+- `GET /api/v1/proxy/ips` - 获取 IP 池列表
+- `POST /api/v1/proxy/validate` - 验证单个 IP
+- `DELETE /api/v1/proxy/ips` - 清空 IP 池
+- `GET /api/v1/proxy/stats` - 获取 IP 统计
 
 ## 使用示例
 
@@ -252,6 +288,7 @@ trend-api-server/
 │   │   ├── accounts.py      # 账号管理
 │   │   ├── contents.py      # 内容查询
 │   │   ├── system.py        # 系统监控
+│   │   ├── proxy.py         # IP 代理管理 (新)
 │   │   └── health.py        # 健康检查
 │   ├── celery_app/          # Celery 配置
 │   │   ├── celery.py        # Celery 实例
@@ -263,14 +300,39 @@ trend-api-server/
 │   │   ├── task.py
 │   │   ├── account.py
 │   │   ├── content.py
+│   │   ├── proxy.py         # IP 代理模型 (新)
 │   │   └── common.py
+│   ├── utils/               # 工具类
+│   │   └── config_manager.py  # 配置管理 (新)
 │   ├── config.py            # 配置管理
 │   ├── dependencies.py      # 依赖注入
 │   └── main.py              # 应用入口
+├── trend-admin-web/         # 前端项目 (新)
+│   ├── src/
+│   │   ├── api/            # API 调用层
+│   │   ├── components/     # 组件
+│   │   │   ├── Layout/     # 布局组件
+│   │   │   ├── Charts/     # 图表组件
+│   │   │   └── Common/     # 通用组件
+│   │   ├── pages/          # 页面
+│   │   │   ├── Dashboard/  # 仪表盘
+│   │   │   ├── Accounts/   # 账号管理
+│   │   │   ├── Proxy/      # IP 池管理
+│   │   │   ├── Tasks/      # 任务管理
+│   │   │   └── Contents/   # 数据查看
+│   │   ├── hooks/          # 自定义 Hooks
+│   │   ├── store/          # 状态管理
+│   │   ├── types/          # TypeScript 类型
+│   │   ├── utils/          # 工具函数
+│   │   └── App.tsx         # 应用入口
+│   ├── package.json
+│   ├── tsconfig.json
+│   └── vite.config.ts
+├── static/web/              # 前端构建产物 (自动生成)
 ├── requirements.txt         # Python 依赖
 ├── Dockerfile               # Docker 镜像
+├── .dockerignore            # Docker 忽略文件 (新)
 ├── supervisord.conf         # Supervisor 配置
-├── docker-compose.yaml      # Docker Compose 配置
 ├── .env.example             # 环境变量示例
 └── README.md                # 项目文档
 ```

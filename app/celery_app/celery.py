@@ -22,6 +22,7 @@ celery_app.conf.update(
     result_expires=3600 * 24,  # 结果保留 24 小时
     worker_prefetch_multiplier=1,  # 每次只预取 1 个任务
     worker_max_tasks_per_child=50,  # Worker 执行 50 个任务后重启（防止内存泄漏）
+    broker_connection_retry_on_startup=True,  # Celery 6.0+ 需要显式设置
 )
 
 # 任务路由配置

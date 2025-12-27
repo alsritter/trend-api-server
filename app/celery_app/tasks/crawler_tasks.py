@@ -4,6 +4,7 @@ from celery import Task
 from celery.utils.log import get_task_logger
 from app.celery_app.celery import celery_app
 from app.config import settings
+from app.utils.crawler_config import merge_task_config
 
 logger = get_task_logger(__name__)
 
@@ -69,26 +70,25 @@ def run_crawler(
     if checkpoint_id:
         cmd.extend(["--checkpoint_id", checkpoint_id])
 
-    # 设置环境变量（配置参数）
+    # 使用配置转换工具生成环境变量
+    # 这样可以将 API 服务的配置传递给 MediaCrawlerPro-Python，无需修改其代码
+    task_params = {
+        "platform": platform,
+        "crawler_type": crawler_type,
+        "keywords": keywords,
+        "max_notes": max_notes_count,
+        "enable_comments": enable_comments,
+        "enable_sub_comments": enable_sub_comments,
+        "enable_checkpoint": enable_checkpoint,
+        "checkpoint_id": checkpoint_id,
+    }
+
+    # 获取合并后的环境变量配置
+    env_config = merge_task_config(task_params)
+
+    # 更新当前环境变量
     env = os.environ.copy()
-    env.update({
-        "RELATION_DB_HOST": settings.MYSQL_HOST,
-        "RELATION_DB_PORT": str(settings.MYSQL_PORT),
-        "RELATION_DB_USER": settings.MYSQL_USER,
-        "RELATION_DB_PWD": settings.MYSQL_PASSWORD,
-        "RELATION_DB_NAME": settings.MYSQL_DATABASE,
-        "REDIS_DB_HOST": settings.REDIS_HOST,
-        "REDIS_DB_PORT": str(settings.REDIS_PORT),
-        "REDIS_DB_PWD": settings.REDIS_PASSWORD,
-        "REDIS_DB_NUM": str(settings.REDIS_DB),
-        "SIGN_SRV_HOST": settings.SIGN_SRV_HOST,
-        "SIGN_SRV_PORT": str(settings.SIGN_SRV_PORT),
-        "CRAWLER_MAX_NOTES_COUNT": str(max_notes_count),
-        "ENABLE_GET_COMMENTS": "True" if enable_comments else "False",
-        "ENABLE_GET_SUB_COMMENTS": "True" if enable_sub_comments else "False",
-        "SAVE_DATA_OPTION": "db",  # 强制使用数据库存储
-        "ACCOUNT_POOL_SAVE_TYPE": "mysql",  # 使用 MySQL 账号池
-    })
+    env.update(env_config)
 
     try:
         # 执行爬虫命令（使用 subprocess）

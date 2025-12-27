@@ -1,6 +1,14 @@
 # 使用多阶段构建，从官方 Node.js 镜像获取 Node.js 和 npm
 FROM node:18-slim AS nodejs
 
+# 前端构建阶段
+FROM node:18-slim AS frontend-builder
+WORKDIR /app
+COPY trend-admin-web ./trend-admin-web
+WORKDIR /app/trend-admin-web
+RUN npm ci
+RUN npm run build
+
 # Python 基础镜像
 FROM python:3.9.19-slim
 
@@ -44,6 +52,9 @@ WORKDIR /app/trend-api-server
 
 # 安装 API Server 依赖
 RUN pip3 install --no-cache-dir -r requirements.txt
+
+# 复制前端构建产物
+COPY --from=frontend-builder /app/static/web /app/trend-api-server/static/web
 
 # 创建日志目录
 RUN mkdir -p /var/log/trend-api-server /var/log/supervisor
