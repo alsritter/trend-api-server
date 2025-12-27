@@ -8,7 +8,6 @@ import redis.asyncio as aioredis
 
 router = APIRouter()
 
-
 @router.get("/health")
 async def system_health(conn: aiomysql.Connection = Depends(get_db)):
     """
