@@ -1,0 +1,338 @@
+name: Aliyun K8s Deployment Workflow
+
+on:
+  workflow_call:
+    inputs:
+      dockerfile:
+        required: true
+        type: string
+      image-name:
+        required: true
+        type: string
+      container-name:
+        required: true
+        type: string
+      namespace:
+        required: false
+        type: string
+        default: "default"
+      replicas:
+        required: false
+        type: string
+        default: "2"
+      container-port:
+        required: false
+        type: string
+        default: "3000"
+      service-port:
+        required: false
+        type: string
+        default: "80"
+      service-type:
+        required: false
+        type: string
+        default: "ClusterIP"
+      config-file-path:
+        required: false
+        type: string
+        default: ""
+      secret-file-path:
+        required: false
+        type: string
+        default: ""
+      env-from-configmap:
+        required: false
+        type: string
+        default: ""
+      env-from-secret:
+        required: false
+        type: string
+        default: ""
+      resource-limits-memory:
+        required: false
+        type: string
+        default: "512Mi"
+      resource-requests-memory:
+        required: false
+        type: string
+        default: "256Mi"
+    secrets:
+      ALIYUN_USERNAME_K8S:
+        required: true
+      ALIYUN_PASSWORD_K8S:
+        required: true
+      KUBE_CONFIG_DATA:
+        required: true
+      WECHAT_WORK_BOT_WEBHOOK:
+        required: true
+
+jobs:
+  build_and_push:
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ inputs.container-name }}:${{ inputs.image-name }}-${{ github.run_number }}
+      full-image: registry.cn-shenzhen.aliyuncs.com/qjwwy-pro/${{ inputs.container-name }}:${{ inputs.image-name }}-${{ github.run_number }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Login to Aliyun Docker Registry
+        uses: docker/login-action@v2
+        with:
+          registry: registry.cn-shenzhen.aliyuncs.com
+          username: ${{ secrets.ALIYUN_USERNAME_K8S }}
+          password: ${{ secrets.ALIYUN_PASSWORD_K8S }}
+
+      - name: Print image details
+        run: |
+          echo "============================================"
+          echo "🐳 Docker 镜像构建信息"
+          echo "============================================"
+          echo "镜像名称: ${{ inputs.container-name }}"
+          echo "镜像标签: ${{ inputs.image-name }}-${{ github.run_number }}"
+          echo "完整镜像地址: registry.cn-shenzhen.aliyuncs.com/qjwwy-pro/${{ inputs.container-name }}:${{ inputs.image-name }}-${{ github.run_number }}"
+          echo "Dockerfile: ${{ inputs.dockerfile }}"
+          echo "构建上下文: ."
+          echo "============================================"
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: ${{ inputs.dockerfile }}
+          build-args: |
+            name=app
+          push: true
+          tags: registry.cn-shenzhen.aliyuncs.com/qjwwy-pro/${{ inputs.container-name }}:${{ inputs.image-name }}-${{ github.run_number }}
+
+      - name: Get current time (Shanghai)
+        id: current-time
+        run: |
+          echo "time=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+
+      - name: Notify WeChat - Build Success
+        uses: chf007/action-wechat-work@master
+        env:
+          WECHAT_WORK_BOT_WEBHOOK: ${{secrets.WECHAT_WORK_BOT_WEBHOOK}}
+        with:
+          msgtype: markdown
+          content: |
+            ### 🎉 镜像构建成功 🎉
+            **项目**: ${{ github.repository }}
+            **分支**: ${{ github.ref_name }}
+            **版本**: ${{ inputs.image-name }}-${{ github.run_number }}
+            **完整镜像地址**: `registry.cn-shenzhen.aliyuncs.com/qjwwy-pro/${{ inputs.container-name }}:${{ inputs.image-name }}-${{ github.run_number }}`
+            **触发者**: ${{ github.actor }}
+            **部署时间**: ${{ steps.current-time.outputs.time }} (CST)
+
+  deploy:
+    needs: build_and_push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v1
+
+      - name: Set Kubernetes Context
+        uses: azure/k8s-set-context@v1
+        with:
+          kubeconfig: ${{ secrets.KUBE_CONFIG_DATA }}
+
+      - name: Get current time (Shanghai)
+        id: current-time
+        run: |
+          echo "time=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+
+      - name: Apply ConfigMap from file
+        if: inputs.config-file-path != ''
+        run: |
+          # 确保命名空间存在
+          kubectl get namespace ${{ inputs.namespace }} || kubectl create namespace ${{ inputs.namespace }}
+
+          # 创建ConfigMap名称
+          CONFIG_MAP_NAME="${{ inputs.container-name }}-config"
+
+          # 创建或更新ConfigMap
+          kubectl create configmap ${CONFIG_MAP_NAME} --from-file=${{ inputs.config-file-path }} -n ${{ inputs.namespace }} --dry-run=client -o yaml | kubectl apply -f -
+
+          # 设置环境变量供后续步骤使用
+          echo "CONFIG_MAP_NAME=${CONFIG_MAP_NAME}" >> $GITHUB_ENV
+
+      - name: Apply Secret from file
+        if: inputs.secret-file-path != ''
+        run: |
+          # 确保命名空间存在
+          kubectl get namespace ${{ inputs.namespace }} || kubectl create namespace ${{ inputs.namespace }}
+
+          # 创建Secret名称
+          SECRET_NAME="${{ inputs.container-name }}-secret"
+
+          # 创建或更新Secret
+          kubectl create secret generic ${SECRET_NAME} --from-file=${{ inputs.secret-file-path }} -n ${{ inputs.namespace }} --dry-run=client -o yaml | kubectl apply -f -
+
+          # 设置环境变量供后续步骤使用
+          echo "SECRET_NAME=${SECRET_NAME}" >> $GITHUB_ENV
+
+      - name: Create Deployment YAML
+        run: |
+          cat > deployment.yaml << 'EOL'
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: ${{ inputs.container-name }}
+            namespace: ${{ inputs.namespace }}
+            labels:
+              app: ${{ inputs.container-name }}
+          spec:
+            replicas: ${{ inputs.replicas }}
+            selector:
+              matchLabels:
+                app: ${{ inputs.container-name }}
+            template:
+              metadata:
+                labels:
+                  app: ${{ inputs.container-name }}
+              spec:
+                # 添加镜像拉取凭证
+                imagePullSecrets:
+                - name: ${{ inputs.image-pull-secret || 'aliyun-registry-secret' }}
+                containers:
+                - name: ${{ inputs.container-name }}
+                  image: ${{ needs.build_and_push.outputs.full-image }}
+                  ports:
+                  - containerPort: ${{ inputs.container-port }}
+                  resources:
+                    limits:
+                      memory: ${{ inputs.resource-limits-memory }}
+                    requests:
+                      memory: ${{ inputs.resource-requests-memory }}
+          EOL
+
+          # 使用ConfigMap（如果创建了）
+          if [ -n "${{ env.CONFIG_MAP_NAME }}" ]; then
+            sed -i '/containers:/,/resources:/ s/\(.*\)resources:/\1envFrom:\n\1  - configMapRef:\n\1      name: ${{ env.CONFIG_MAP_NAME }}\n\1resources:/' deployment.yaml
+          # 如果没有新创建的ConfigMap但指定了env-from-configmap
+          elif [ -n "${{ inputs.env-from-configmap }}" ]; then
+            sed -i '/containers:/,/resources:/ s/\(.*\)resources:/\1envFrom:\n\1  - configMapRef:\n\1      name: ${{ inputs.env-from-configmap }}\n\1resources:/' deployment.yaml
+          fi
+
+          # 使用Secret（如果创建了）
+          if [ -n "${{ env.SECRET_NAME }}" ]; then
+            if [ -n "${{ env.CONFIG_MAP_NAME }}" ] || [ -n "${{ inputs.env-from-configmap }}" ]; then
+              # 如果已经有ConfigMap引用，添加Secret引用
+              sed -i '/configMapRef:/,/name:/ s/\(.*\)name:.*/\1name: '"${CONFIG_MAP_NAME:-${{ inputs.env-from-configmap }}}"'\n\1  - secretRef:\n\1      name: ${{ env.SECRET_NAME }}/' deployment.yaml
+            else
+              # 否则直接添加Secret引用
+              sed -i '/containers:/,/resources:/ s/\(.*\)resources:/\1envFrom:\n\1  - secretRef:\n\1      name: ${{ env.SECRET_NAME }}\n\1resources:/' deployment.yaml
+            fi
+          # 如果没有新创建的Secret但指定了env-from-secret
+          elif [ -n "${{ inputs.env-from-secret }}" ]; then
+            if [ -n "${{ env.CONFIG_MAP_NAME }}" ] || [ -n "${{ inputs.env-from-configmap }}" ]; then
+              # 如果已有configMap，添加secretRef
+              sed -i '/configMapRef:/,/name:/ s/\(.*\)name:.*/\1name: '"${CONFIG_MAP_NAME:-${{ inputs.env-from-configmap }}}"'\n\1  - secretRef:\n\1      name: ${{ inputs.env-from-secret }}/' deployment.yaml
+            else
+              # 如果没有configMap，直接添加secretRef
+              sed -i '/containers:/,/resources:/ s/\(.*\)resources:/\1envFrom:\n\1  - secretRef:\n\1      name: ${{ inputs.env-from-secret }}\n\1resources:/' deployment.yaml
+            fi
+          fi
+
+      - name: Create Service YAML
+        run: |
+          cat > service.yaml << EOL
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: ${{ inputs.container-name }}-service
+            namespace: ${{ inputs.namespace }}
+          spec:
+            selector:
+              app: ${{ inputs.container-name }}
+            ports:
+            - port: ${{ inputs.service-port }}
+              targetPort: ${{ inputs.container-port }}
+            type: ${{ inputs.service-type }}
+          EOL
+
+      - name: Deploy to Kubernetes
+        run: |
+          # 确保命名空间存在
+          kubectl get namespace ${{ inputs.namespace }} || kubectl create namespace ${{ inputs.namespace }}
+
+          # 显示部署配置内容（调试用）
+          echo "Deployment配置:"
+          cat deployment.yaml
+          echo "Service配置:"
+          cat service.yaml
+
+          # 应用部署配置
+          kubectl apply -f deployment.yaml
+          kubectl apply -f service.yaml
+
+          # 等待部署完成
+          kubectl rollout status deployment/${{ inputs.container-name }} -n ${{ inputs.namespace }} --timeout=300s
+
+      - name: Get Service Details
+        id: service-details
+        run: |
+          if [ "${{ inputs.service-type }}" == "LoadBalancer" ]; then
+            EXTERNAL_IP=$(kubectl get svc ${{ inputs.container-name }}-service -n ${{ inputs.namespace }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+            echo "SERVICE_INFO=可通过负载均衡器访问: ${EXTERNAL_IP}:${{ inputs.service-port }}" >> $GITHUB_OUTPUT
+          elif [ "${{ inputs.service-type }}" == "NodePort" ]; then
+            NODE_PORT=$(kubectl get svc ${{ inputs.container-name }}-service -n ${{ inputs.namespace }} -o jsonpath='{.spec.ports[0].nodePort}')
+            echo "SERVICE_INFO=可通过节点端口访问: <节点IP>:${NODE_PORT}" >> $GITHUB_OUTPUT
+          else
+            echo "SERVICE_INFO=服务类型为 ClusterIP，仅集群内可访问" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Notify WeChat - Deploy Success
+        uses: chf007/action-wechat-work@master
+        env:
+          WECHAT_WORK_BOT_WEBHOOK: ${{secrets.WECHAT_WORK_BOT_WEBHOOK}}
+        with:
+          msgtype: markdown
+          content: |
+            ### 🚀 部署成功 🚀
+            **项目**: ${{ github.repository }}
+            **分支**: ${{ github.ref_name }}
+            **版本**: ${{ inputs.image-name }}-${{ github.run_number }}
+            **命名空间**: ${{ inputs.namespace }}
+            **容器名**: ${{ inputs.container-name }}
+            **服务信息**: ${{ steps.service-details.outputs.SERVICE_INFO }}
+            **提交**: [${{ github.sha }}] ${{ github.event.head_commit.message }}
+            **部署时间**: ${{ steps.current-time.outputs.time }} (CST)
+            **部署人**: ${{ github.actor }}
+
+  deploy_failure:
+    needs: [build_and_push]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get current time (Shanghai)
+        id: current-time
+        run: |
+          echo "time=$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_OUTPUT
+
+      - name: Notify WeChat - Deploy Failure
+        uses: chf007/action-wechat-work@master
+        env:
+          WECHAT_WORK_BOT_WEBHOOK: ${{secrets.WECHAT_WORK_BOT_WEBHOOK}}
+        with:
+          msgtype: markdown
+          content: |
+            ### ❌ 部署失败 ❌
+            **项目**: ${{ github.repository }}
+            **分支**: ${{ github.ref_name }}
+            **版本**: ${{ inputs.image-name }}-${{ github.run_number }}
+            **失败时间**: ${{ steps.current-time.outputs.time }} (CST)
+            **触发者**: ${{ github.actor }}
+
+            请检查 GitHub Actions 日志以获取详细错误信息。

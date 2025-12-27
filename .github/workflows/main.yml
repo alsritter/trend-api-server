@@ -1,0 +1,28 @@
+name: Deploy Main
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    uses: ./.github/workflows/common_k8s.yml
+    with:
+      dockerfile: ./Dockerfile
+      image-name: 30dayenglish
+      container-name: day30en
+      namespace: lazygpt-pro
+      replicas: "1"
+      container-port: "3000"
+      service-port: "80"
+      service-type: ""
+      env-from-configmap: "30dayen-config"
+      env-from-secret: ""
+      resource-limits-memory: "1024Mi"
+      resource-requests-memory: "256Mi"
+    secrets:
+      ALIYUN_USERNAME_K8S: ${{ secrets.ALIYUN_USERNAME_K8S }}
+      ALIYUN_PASSWORD_K8S: ${{ secrets.ALIYUN_PASSWORD_K8S }}
+      KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+      WECHAT_WORK_BOT_WEBHOOK: ${{ secrets.WECHAT_WORK_BOT_WEBHOOK }}
