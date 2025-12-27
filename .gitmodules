@@ -1,0 +1,6 @@
+[submodule "MediaCrawlerPro-Python"]
+	path = MediaCrawlerPro-Python
+	url = git@github.com:MediaCrawlerPro/MediaCrawlerPro-Python.git
+[submodule "MediaCrawlerPro-SignSrv"]
+	path = MediaCrawlerPro-SignSrv
+	url = git@github.com:MediaCrawlerPro/MediaCrawlerPro-SignSrv.git
