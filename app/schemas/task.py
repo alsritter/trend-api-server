@@ -10,9 +10,10 @@ class TaskCreateRequest(BaseModel):
     keywords: Optional[str] = Field(None, description="搜索关键词（逗号分隔）")
     enable_checkpoint: bool = Field(True, description="是否启用断点续爬")
     checkpoint_id: Optional[str] = Field(None, description="指定检查点ID")
-    max_notes_count: int = Field(100, ge=1, le=1000, description="最大爬取数量")
+    max_notes_count: int = Field(10, ge=1, le=1000, description="最大爬取数量")
     enable_comments: bool = Field(True, description="是否爬取评论")
     enable_sub_comments: bool = Field(False, description="是否爬取二级评论")
+    max_comments_count: int = Field(20, ge=1, le=500, description="每条内容最大评论数量")
 
 
 class TaskCreateResponse(BaseModel):

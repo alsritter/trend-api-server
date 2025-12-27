@@ -32,9 +32,10 @@ def run_crawler(
     keywords: str = "",
     enable_checkpoint: bool = True,
     checkpoint_id: str = "",
-    max_notes_count: int = 100,
+    max_notes_count: int = 10,
     enable_comments: bool = True,
-    enable_sub_comments: bool = False
+    enable_sub_comments: bool = False,
+    max_comments_count: int = 20
 ):
     """
     执行爬虫任务
@@ -48,6 +49,7 @@ def run_crawler(
         max_notes_count: 最大爬取数量
         enable_comments: 是否爬取评论
         enable_sub_comments: 是否爬取二级评论
+        max_comments_count: 每条内容最大评论数量
     """
     logger.info(f"Starting crawler task: platform={platform}, type={crawler_type}, keywords={keywords}")
 
@@ -79,6 +81,7 @@ def run_crawler(
         "max_notes": max_notes_count,
         "enable_comments": enable_comments,
         "enable_sub_comments": enable_sub_comments,
+        "max_comments_per_note": max_comments_count,
         "enable_checkpoint": enable_checkpoint,
         "checkpoint_id": checkpoint_id,
     }

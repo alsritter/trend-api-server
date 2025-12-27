@@ -76,14 +76,14 @@ class Settings(BaseSettings):
 
     # 爬取控制配置
     CRAWLER_START_PAGE: int = 1  # 开始页数
-    CRAWLER_MAX_NOTES_COUNT: int = 40  # 最大爬取数量
+    CRAWLER_MAX_NOTES_COUNT: int = 20  # 最大爬取数量
     CRAWLER_MAX_CONCURRENCY_NUM: int = 1  # 并发数量（建议设为1）
     CRAWLER_TIME_SLEEP: int = 5  # 请求间隔（秒）
 
     # 评论爬取配置
     CRAWLER_ENABLE_GET_COMMENTS: bool = True  # 是否爬取评论
     CRAWLER_ENABLE_GET_SUB_COMMENTS: bool = False  # 是否爬取二级评论
-    CRAWLER_PER_NOTE_MAX_COMMENTS_COUNT: int = 0  # 单帖最大评论数（0表示不限制）
+    CRAWLER_PER_NOTE_MAX_COMMENTS_COUNT: int = 30  # 单帖最大评论数（0表示不限制）
 
     # 断点续爬配置
     CRAWLER_ENABLE_CHECKPOINT: bool = True  # 是否启用断点续爬

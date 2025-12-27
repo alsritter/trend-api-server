@@ -235,7 +235,7 @@ curl -X POST "http://localhost:8000/api/v1/tasks" \
     "crawler_type": "search",
     "keywords": "AI,ChatGPT",
     "enable_checkpoint": true,
-    "max_notes_count": 100,
+    "max_notes_count": 10,
     "enable_comments": true
   }'
 ```

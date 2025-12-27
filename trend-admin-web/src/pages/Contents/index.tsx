@@ -5,6 +5,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { PLATFORM_OPTIONS } from '@/utils/constants'
 import { formatDateTime } from '@/utils/format'
 import { useState } from 'react'
+import NoteDetailDrawer from '@/components/NoteDetailDrawer'
+import type { Note } from '@/types/api'
 
 const { RangePicker } = DatePicker
 const { Search } = Input
@@ -15,6 +17,8 @@ function Contents() {
   const [keyword, setKeyword] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
+  const [selectedNote, setSelectedNote] = useState<Note | null>(null)
+  const [drawerVisible, setDrawerVisible] = useState(false)
 
   const { data, isLoading } = useQuery({
     queryKey: ['contents', platform, keyword, page, pageSize],
@@ -36,6 +40,16 @@ function Contents() {
   const handleSearch = (value: string) => {
     setKeyword(value)
     setPage(1)
+  }
+
+  const handleRowClick = (record: Note) => {
+    setSelectedNote(record)
+    setDrawerVisible(true)
+  }
+
+  const handleDrawerClose = () => {
+    setDrawerVisible(false)
+    setSelectedNote(null)
   }
 
   // 动态列配置（根据平台不同）
@@ -139,6 +153,10 @@ function Contents() {
           dataSource={data?.items || []}
           rowKey="id"
           loading={isLoading}
+          onRow={(record) => ({
+            onClick: () => handleRowClick(record),
+            style: { cursor: 'pointer' },
+          })}
           pagination={{
             current: page,
             pageSize: pageSize,
@@ -152,6 +170,13 @@ function Contents() {
           }}
         />
       </Card>
+
+      <NoteDetailDrawer
+        visible={drawerVisible}
+        onClose={handleDrawerClose}
+        note={selectedNote}
+        platform={platform}
+      />
     </div>
   )
 }

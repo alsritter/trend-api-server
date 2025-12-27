@@ -91,6 +91,7 @@ export interface TaskCreateRequest {
   max_notes_count: number;
   enable_comments: boolean;
   enable_sub_comments: boolean;
+  max_comments_count: number;
 }
 
 export interface TaskProgress {
@@ -124,4 +125,84 @@ export interface DatabaseStats {
     comments: number;
     creators: number;
   };
+}
+
+// 笔记内容类型（通用字段）
+export interface Note {
+  id?: number;
+  note_id: string;
+  title?: string;
+  desc?: string;
+  content?: string;
+  user_id?: string;
+  nickname?: string;
+  user_name?: string;
+  avatar?: string;
+  create_time?: string;
+  update_time?: string;
+  add_ts?: number;
+  last_modify_ts?: number;
+  
+  // 小红书特定字段
+  type?: string; // video 或 normal
+  liked_count?: number;
+  collected_count?: number;
+  comment_count?: number;
+  share_count?: number;
+  image_list?: string;
+  video_url?: string;
+  
+  // 抖音/快手特定字段
+  video_play_count?: number;
+  video_share_count?: number;
+  aweme_id?: string;
+  video_id?: string;
+  
+  // B站特定字段
+  video_danmaku?: number;
+  video_comment?: number;
+  video_like_count?: number;
+  video_collect?: number;
+  bvid?: string;
+  
+  // 微博特定字段
+  attitudes_count?: number;
+  comments_count?: number;
+  reposts_count?: number;
+  mblogid?: string;
+  
+  // 贴吧特定字段
+  total_replay_page?: number;
+  view_count?: number;
+  thread_id?: string;
+  
+  // 知乎特定字段
+  content_type?: string;
+  voteup_count?: number;
+  content_id?: string;
+  question_id?: string;
+}
+
+// 评论类型（通用字段）
+export interface Comment {
+  id?: number;
+  comment_id: string;
+  note_id: string;
+  content: string;
+  user_id?: string;
+  nickname?: string;
+  user_name?: string;
+  avatar?: string;
+  like_count?: number;
+  liked_count?: number;
+  sub_comment_count?: number;
+  create_time?: string;
+  update_time?: string;
+  add_ts?: number;
+  last_modify_ts?: number;
+  parent_comment_id?: string;
+  
+  // 平台特定字段
+  ip_location?: string;
+  pictures?: string;
 }

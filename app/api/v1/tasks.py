@@ -30,6 +30,7 @@ async def create_task(request: TaskCreateRequest):
     - **max_notes_count**: 最大爬取数量（1-1000）
     - **enable_comments**: 是否爬取评论
     - **enable_sub_comments**: 是否爬取二级评论
+    - **max_comments_count**: 每条内容最大评论数量（1-500）
     """
     try:
         # 调用 Celery 任务
@@ -42,7 +43,8 @@ async def create_task(request: TaskCreateRequest):
                 "checkpoint_id": request.checkpoint_id or "",
                 "max_notes_count": request.max_notes_count,
                 "enable_comments": request.enable_comments,
-                "enable_sub_comments": request.enable_sub_comments
+                "enable_sub_comments": request.enable_sub_comments,
+                "max_comments_count": request.max_comments_count
             }
         )
 
