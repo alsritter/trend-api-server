@@ -1,6 +1,16 @@
+# 使用多阶段构建，从官方 Node.js 镜像获取 Node.js 和 npm
+FROM node:18-slim AS nodejs
+
+# Python 基础镜像
 FROM python:3.9.19-slim
 
 WORKDIR /app
+
+# 从 Node.js 镜像复制 Node.js 和 npm（SignSrv 需要）
+COPY --from=nodejs /usr/local/bin/node /usr/local/bin/
+COPY --from=nodejs /usr/local/lib/node_modules /usr/local/lib/node_modules
+COPY --from=nodejs /usr/local/bin/npm /usr/local/bin/
+COPY --from=nodejs /usr/local/bin/npx /usr/local/bin/
 
 # 安装系统依赖
 RUN apt-get update && apt-get install -y \
@@ -21,6 +31,13 @@ COPY MediaCrawlerPro-Python /app/MediaCrawlerPro-Python
 WORKDIR /app/MediaCrawlerPro-Python
 RUN pip3 install --no-cache-dir -r requirements.txt
 
+# 复制 MediaCrawlerPro-SignSrv (从子模块)
+COPY MediaCrawlerPro-SignSrv /app/MediaCrawlerPro-SignSrv
+
+# 安装 MediaCrawlerPro-SignSrv 依赖
+WORKDIR /app/MediaCrawlerPro-SignSrv
+RUN pip3 install --no-cache-dir -r requirements.txt
+
 # 复制 trend-api-server
 COPY . /app/trend-api-server
 WORKDIR /app/trend-api-server
@@ -35,10 +52,10 @@ RUN mkdir -p /var/log/trend-api-server /var/log/supervisor
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # 暴露端口
-EXPOSE 8000
+EXPOSE 8000 8989
 
 # 设置环境变量
-ENV PYTHONPATH="/app/MediaCrawlerPro-Python:/app/trend-api-server"
+ENV PYTHONPATH="/app/MediaCrawlerPro-Python:/app/MediaCrawlerPro-SignSrv:/app/trend-api-server"
 ENV PYTHONUNBUFFERED=1
 
 # 使用 supervisor 启动多进程

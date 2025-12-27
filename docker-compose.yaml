@@ -1,51 +1,41 @@
 version: '3.8'
 
 services:
-  # API 服务 + Celery Worker
+  # API 服务 + Celery Worker + SignSrv (统一打包)
   trend-api-server:
     build:
-      context: ..
-      dockerfile: trend-api-server/Dockerfile
+      context: .
+      dockerfile: Dockerfile
     container_name: trend-api-server
     ports:
-      - "8000:8000"
+      - "8000:8000"    # API Server
+      - "8989:8989"    # SignSrv
     depends_on:
       - db
       - redis
-      - signsrv
     volumes:
-      - ./:/app/trend-api-server
-      - ../MediaCrawlerPro-Python:/app/MediaCrawlerPro-Python
+      - ./app:/app/trend-api-server/app
+      - ./MediaCrawlerPro-Python:/app/MediaCrawlerPro-Python
+      - ./MediaCrawlerPro-SignSrv:/app/MediaCrawlerPro-SignSrv
       - api-logs:/var/log/trend-api-server
     environment:
+      # 数据库配置
       - RELATION_DB_USER=root
       - RELATION_DB_HOST=mysql_db
       - RELATION_DB_PWD=123456
       - RELATION_DB_PORT=3306
       - RELATION_DB_NAME=media_crawler_pro
+      # Redis 配置
       - REDIS_DB_HOST=redis_cache
       - REDIS_DB_PWD=123456
       - REDIS_DB_PORT=6379
       - REDIS_DB_NUM=0
-      - SIGN_SRV_HOST=mediacrawler_signsrv
+      # SignSrv 配置（localhost 因为在同一容器内）
+      - SIGN_SRV_HOST=localhost
       - SIGN_SRV_PORT=8989
+      # Crawler 配置
       - CRAWLER_BASE_PATH=/app/MediaCrawlerPro-Python
       - CRAWLER_PYTHON_PATH=python
-    restart: unless-stopped
-    networks:
-      - mediacrawler-network
-
-  # SignSrv 签名服务
-  signsrv:
-    image: mediacrawler_signsrv:latest
-    container_name: mediacrawler_signsrv
-    ports:
-      - "8989:8989"
-    environment:
-      - APP_PORT=8989
-      - APP_HOST=0.0.0.0
-      - LOGGER_LEVEL=ERROR
-    command: python app.py
     restart: unless-stopped
     networks:
       - mediacrawler-network
