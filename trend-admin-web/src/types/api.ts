@@ -157,6 +157,8 @@ export interface Note {
   avatar?: string;
   create_time?: string;
   update_time?: string;
+  time?: number; // 笔记发布时间戳（数据库字段）
+  last_update_time?: number; // 笔记最后更新时间戳（数据库字段）
   add_ts?: number;
   last_modify_ts?: number;
   

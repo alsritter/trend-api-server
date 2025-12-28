@@ -1,9 +1,12 @@
-import { Drawer, Descriptions, Table, Tabs, Spin, Empty } from 'antd'
+import { Drawer, Tabs, Spin, Empty, List, Avatar, Space, Card, Typography, Row, Col, Divider, Statistic } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { contentsApi } from '@/api/contents'
-import { formatDateTime } from '@/utils/format'
+import { formatDateTime, getContentId } from '@/utils/format'
 import type { Note, Comment } from '@/types/api'
 import { useState } from 'react'
+import { LikeOutlined, MessageOutlined, HeartOutlined, ShareAltOutlined, EyeOutlined, StarOutlined } from '@ant-design/icons'
+
+const { Title, Text, Paragraph } = Typography
 
 interface NoteDetailDrawerProps {
   visible: boolean
@@ -14,148 +17,144 @@ interface NoteDetailDrawerProps {
 
 function NoteDetailDrawer({ visible, onClose, note, platform }: NoteDetailDrawerProps) {
   const [commentPage, setCommentPage] = useState(1)
-  const [commentPageSize, setCommentPageSize] = useState(20)
+  const [commentPageSize] = useState(20)
+
+  // 获取当前平台的内容ID
+  const contentId = note ? getContentId(platform, note) : ''
 
   // 获取评论列表
   const { data: commentsData, isLoading: commentsLoading } = useQuery({
-    queryKey: ['comments', platform, note?.note_id, commentPage, commentPageSize],
+    queryKey: ['comments', platform, contentId, commentPage, commentPageSize],
     queryFn: () =>
       contentsApi.getComments(platform, {
-        note_id: note?.note_id || '',
+        note_id: contentId,
         page: commentPage,
         page_size: commentPageSize,
       }),
-    enabled: visible && !!note?.note_id,
+    enabled: visible && !!contentId,
   })
 
   if (!note) return null
 
-  // 通用字段
-  const generalItems = [
-    { key: 'note_id', label: '笔记ID', children: note.note_id },
-    { key: 'title', label: '标题', children: note.title || note.desc?.substring(0, 50) },
-    { key: 'nickname', label: '作者', children: note.nickname || note.user_name },
-    { key: 'user_id', label: '作者ID', children: note.user_id },
-  ]
-
-  // 平台特定字段
-  const platformSpecificItems = () => {
-    const items: any[] = []
+  // 渲染数据统计卡片
+  const renderStatistics = () => {
+    const stats: Array<{ label: string; value: any; icon?: React.ReactNode }> = []
 
     if (platform === 'xhs') {
-      items.push(
-        { key: 'type', label: '类型', children: note.type === 'video' ? '视频' : '图文' },
-        { key: 'liked_count', label: '点赞数', children: note.liked_count },
-        { key: 'collected_count', label: '收藏数', children: note.collected_count },
-        { key: 'comment_count', label: '评论数', children: note.comment_count },
-        { key: 'share_count', label: '分享数', children: note.share_count },
+      stats.push(
+        { label: '点赞', value: note.liked_count || 0, icon: <HeartOutlined /> },
+        { label: '收藏', value: note.collected_count || 0, icon: <StarOutlined /> },
+        { label: '评论', value: note.comment_count || 0, icon: <MessageOutlined /> },
+        { label: '分享', value: note.share_count || 0, icon: <ShareAltOutlined /> },
       )
     } else if (platform === 'dy' || platform === 'ks') {
-      items.push(
-        { key: 'video_play_count', label: '播放量', children: note.video_play_count },
-        { key: 'liked_count', label: '点赞数', children: note.liked_count },
-        { key: 'comment_count', label: '评论数', children: note.comment_count },
-        { key: 'video_share_count', label: '分享数', children: note.video_share_count },
+      stats.push(
+        { label: '播放', value: note.video_play_count || 0, icon: <EyeOutlined /> },
+        { label: '点赞', value: note.liked_count || 0, icon: <HeartOutlined /> },
+        { label: '评论', value: note.comment_count || 0, icon: <MessageOutlined /> },
+        { label: '分享', value: note.video_share_count || 0, icon: <ShareAltOutlined /> },
       )
     } else if (platform === 'bili') {
-      items.push(
-        { key: 'video_play_count', label: '播放量', children: note.video_play_count },
-        { key: 'video_danmaku', label: '弹幕数', children: note.video_danmaku },
-        { key: 'video_comment', label: '评论数', children: note.video_comment },
-        { key: 'video_like_count', label: '点赞数', children: note.video_like_count },
+      stats.push(
+        { label: '播放', value: note.video_play_count || 0, icon: <EyeOutlined /> },
+        { label: '弹幕', value: note.video_danmaku || 0 },
+        { label: '评论', value: note.video_comment || 0, icon: <MessageOutlined /> },
+        { label: '点赞', value: note.video_like_count || 0, icon: <HeartOutlined /> },
       )
     } else if (platform === 'wb') {
-      items.push(
-        { key: 'attitudes_count', label: '点赞数', children: note.attitudes_count },
-        { key: 'comments_count', label: '评论数', children: note.comments_count },
-        { key: 'reposts_count', label: '转发数', children: note.reposts_count },
+      stats.push(
+        { label: '点赞', value: note.attitudes_count || 0, icon: <HeartOutlined /> },
+        { label: '评论', value: note.comments_count || 0, icon: <MessageOutlined /> },
+        { label: '转发', value: note.reposts_count || 0, icon: <ShareAltOutlined /> },
       )
     } else if (platform === 'tieba') {
-      items.push(
-        { key: 'total_replay_page', label: '评论页数', children: note.total_replay_page },
-        { key: 'view_count', label: '浏览量', children: note.view_count },
+      stats.push(
+        { label: '浏览', value: note.view_count || 0, icon: <EyeOutlined /> },
+        { label: '评论页数', value: note.total_replay_page || 0 },
       )
     } else if (platform === 'zhihu') {
-      items.push(
-        { key: 'content_type', label: '内容类型', children: note.content_type },
-        { key: 'voteup_count', label: '点赞数', children: note.voteup_count },
-        { key: 'comment_count', label: '评论数', children: note.comment_count },
+      stats.push(
+        { label: '点赞', value: note.voteup_count || 0, icon: <HeartOutlined /> },
+        { label: '评论', value: note.comment_count || 0, icon: <MessageOutlined /> },
       )
     }
 
-    return items
+    return (
+      <Row gutter={16}>
+        {stats.map((stat, index) => (
+          <Col span={6} key={index}>
+            <Statistic
+              title={stat.label}
+              value={stat.value}
+              prefix={stat.icon}
+              valueStyle={{ fontSize: 20 }}
+            />
+          </Col>
+        ))}
+      </Row>
+    )
   }
-
-  const timeItems = [
-    { key: 'create_time', label: '发布时间', children: note.create_time ? formatDateTime(note.create_time) : '-' },
-    { key: 'update_time', label: '更新时间', children: note.update_time ? formatDateTime(note.update_time) : '-' },
-  ]
-
-  const contentItems = [
-    { 
-      key: 'desc', 
-      label: '内容描述', 
-      children: <div style={{ maxHeight: 300, overflow: 'auto', whiteSpace: 'pre-wrap' }}>{note.desc || note.content}</div>,
-      span: 3 
-    },
-  ]
-
-  // 评论列表列定义
-  const commentColumns = [
-    {
-      title: '评论ID',
-      dataIndex: 'comment_id',
-      key: 'comment_id',
-      width: 150,
-      ellipsis: true,
-    },
-    {
-      title: '用户',
-      dataIndex: 'nickname',
-      key: 'nickname',
-      width: 120,
-      render: (text: string, record: Comment) => text || record.user_name,
-    },
-    {
-      title: '评论内容',
-      dataIndex: 'content',
-      key: 'content',
-      ellipsis: true,
-    },
-    {
-      title: '点赞数',
-      dataIndex: 'like_count',
-      key: 'like_count',
-      width: 100,
-      render: (text: number) => text || 0,
-    },
-    {
-      title: '子评论数',
-      dataIndex: 'sub_comment_count',
-      key: 'sub_comment_count',
-      width: 100,
-      render: (text: number) => text || 0,
-    },
-    {
-      title: '发布时间',
-      dataIndex: 'create_time',
-      key: 'create_time',
-      width: 180,
-      render: formatDateTime,
-    },
-  ]
 
   const tabItems = [
     {
       key: 'info',
       label: '笔记详情',
       children: (
-        <Descriptions 
-          bordered 
-          column={3}
-          size="small"
-          items={[...generalItems, ...platformSpecificItems(), ...timeItems, ...contentItems]}
-        />
+        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          {/* 标题区域 */}
+          <Card>
+            <Title level={4} style={{ marginBottom: 8 }}>
+              {note.title || note.desc?.substring(0, 100)}
+            </Title>
+            <Space size="middle">
+              <Text type="secondary">
+                作者: <Text strong>{note.nickname || note.user_name}</Text>
+              </Text>
+              {platform === 'xhs' && note.type && (
+                <Text type="secondary">
+                  类型: <Text strong>{note.type === 'video' ? '视频' : '图文'}</Text>
+                </Text>
+              )}
+              {platform === 'zhihu' && note.content_type && (
+                <Text type="secondary">
+                  类型: <Text strong>{note.content_type}</Text>
+                </Text>
+              )}
+            </Space>
+          </Card>
+
+          {/* 数据统计卡片 */}
+          <Card title="数据统计">
+            {renderStatistics()}
+          </Card>
+
+          {/* 内容详情 */}
+          <Card title="内容详情">
+            <Paragraph
+              style={{
+                maxHeight: 400,
+                overflow: 'auto',
+                whiteSpace: 'pre-wrap',
+                marginBottom: 16
+              }}
+            >
+              {note.desc || note.content || '无内容描述'}
+            </Paragraph>
+            <Divider />
+            <Space direction="vertical" size="small" style={{ width: '100%' }}>
+              <Text type="secondary">笔记ID: {note.note_id}</Text>
+              <Text type="secondary">作者ID: {note.user_id}</Text>
+              <Text type="secondary">
+                发布时间: {note.time ? formatDateTime(note.time) : '-'}
+              </Text>
+              {note.last_update_time && (
+                <Text type="secondary">
+                  更新时间: {formatDateTime(note.last_update_time)}
+                </Text>
+              )}
+            </Space>
+          </Card>
+        </Space>
       ),
     },
     {
@@ -166,26 +165,75 @@ function NoteDetailDrawer({ visible, onClose, note, platform }: NoteDetailDrawer
           <Spin />
         </div>
       ) : (
-        <Table
-          columns={commentColumns}
-          dataSource={commentsData?.items || []}
-          rowKey="comment_id"
-          size="small"
-          pagination={{
-            current: commentPage,
-            pageSize: commentPageSize,
-            total: commentsData?.total || 0,
-            showSizeChanger: true,
-            showTotal: (total) => `共 ${total} 条评论`,
-            onChange: (newPage, newPageSize) => {
-              setCommentPage(newPage)
-              setCommentPageSize(newPageSize)
-            },
-          }}
-          locale={{
-            emptyText: <Empty description="暂无评论" />,
-          }}
-        />
+        <>
+          <List
+            dataSource={commentsData?.items || []}
+            locale={{ emptyText: <Empty description="暂无评论" /> }}
+            renderItem={(item: Comment) => (
+              <Card
+                style={{ marginBottom: 12 }}
+                size="small"
+                styles={{ body: { padding: 12 } }}
+              >
+                <List.Item.Meta
+                  avatar={
+                    <Avatar src={item.avatar} style={{ backgroundColor: '#87d068' }}>
+                      {(item.nickname || item.user_name || 'U').charAt(0)}
+                    </Avatar>
+                  }
+                  title={
+                    <Space>
+                      <span style={{ fontWeight: 500 }}>
+                        {item.nickname || item.user_name}
+                      </span>
+                      <span style={{ fontSize: 12, color: '#999' }}>
+                        {item.create_time ? formatDateTime(item.create_time) : '-'}
+                      </span>
+                    </Space>
+                  }
+                  description={
+                    <div>
+                      <div style={{ marginBottom: 8, color: '#333', whiteSpace: 'pre-wrap' }}>
+                        {item.content}
+                      </div>
+                      <Space size="large">
+                        <span style={{ fontSize: 12, color: '#666' }}>
+                          <LikeOutlined style={{ marginRight: 4 }} />
+                          {item.like_count || 0}
+                        </span>
+                        {(item.sub_comment_count ?? 0) > 0 && (
+                          <span style={{ fontSize: 12, color: '#666' }}>
+                            <MessageOutlined style={{ marginRight: 4 }} />
+                            {item.sub_comment_count} 条回复
+                          </span>
+                        )}
+                        {item.ip_location && (
+                          <span style={{ fontSize: 12, color: '#999' }}>
+                            {item.ip_location}
+                          </span>
+                        )}
+                      </Space>
+                    </div>
+                  }
+                />
+              </Card>
+            )}
+          />
+          {commentsData && commentsData.total > 0 && (
+            <div style={{ marginTop: 16, textAlign: 'center' }}>
+              <Space>
+                <span>共 {commentsData.total} 条评论</span>
+                {commentPage > 1 && (
+                  <a onClick={() => setCommentPage(commentPage - 1)}>上一页</a>
+                )}
+                <span>第 {commentPage} / {Math.ceil(commentsData.total / commentPageSize)} 页</span>
+                {commentPage < Math.ceil(commentsData.total / commentPageSize) && (
+                  <a onClick={() => setCommentPage(commentPage + 1)}>下一页</a>
+                )}
+              </Space>
+            </div>
+          )}
+        </>
       ),
     },
   ]

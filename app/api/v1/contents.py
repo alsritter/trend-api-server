@@ -15,7 +15,7 @@ PLATFORM_CONTENT_TABLES = {
     "bili": "bilibili_video",
     "wb": "weibo_note",
     "tieba": "tieba_note",
-    "zhihu": "zhihu_content"
+    "zhihu": "zhihu_content",
 }
 
 # 平台评论表映射
@@ -26,7 +26,7 @@ PLATFORM_COMMENT_TABLES = {
     "bili": "bilibili_video_comment",
     "wb": "weibo_note_comment",
     "tieba": "tieba_comment",
-    "zhihu": "zhihu_comment"
+    "zhihu": "zhihu_comment",
 }
 
 # 平台创作者表映射
@@ -37,7 +37,18 @@ PLATFORM_CREATOR_TABLES = {
     "bili": "bilibili_up_info",
     "wb": "weibo_creator",
     "tieba": "tieba_creator",
-    "zhihu": "zhihu_creator"
+    "zhihu": "zhihu_creator",
+}
+
+# 平台时间字段映射
+PLATFORM_TIME_FIELDS = {
+    "xhs": "time",
+    "dy": "create_time",
+    "ks": "create_time",
+    "bili": "create_time",
+    "wb": "create_time",
+    "tieba": "publish_time",
+    "zhihu": "created_time",
 }
 
 
@@ -49,7 +60,7 @@ async def list_contents(
     end_date: Optional[str] = Query(None, description="结束日期 (YYYY-MM-DD)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    conn: aiomysql.Connection = Depends(get_db)
+    conn: aiomysql.Connection = Depends(get_db),
 ):
     """
     查询平台内容列表（笔记/视频）
@@ -60,6 +71,7 @@ async def list_contents(
         raise HTTPException(status_code=400, detail=f"Unsupported platform: {platform}")
 
     table_name = PLATFORM_CONTENT_TABLES[platform]
+    time_field = PLATFORM_TIME_FIELDS[platform]
 
     try:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
@@ -69,7 +81,9 @@ async def list_contents(
 
             if keyword:
                 # 不同平台的字段名可能不同，这里使用通用的方式
-                where_clauses.append("(title LIKE %s OR `desc` LIKE %s OR content LIKE %s)")
+                where_clauses.append(
+                    "(title LIKE %s OR `desc` LIKE %s OR content LIKE %s)"
+                )
                 keyword_pattern = f"%{keyword}%"
                 params.extend([keyword_pattern, keyword_pattern, keyword_pattern])
 
@@ -79,14 +93,14 @@ async def list_contents(
             count_sql = f"SELECT COUNT(*) as total FROM {table_name} WHERE {where_sql}"
             await cursor.execute(count_sql, params)
             total_result = await cursor.fetchone()
-            total = total_result['total']
+            total = total_result["total"]
 
             # 查询数据
             offset = (page - 1) * page_size
             data_sql = f"""
                 SELECT * FROM {table_name}
                 WHERE {where_sql}
-                ORDER BY add_ts DESC
+                ORDER BY {time_field} DESC
                 LIMIT %s OFFSET %s
             """
             await cursor.execute(data_sql, params + [page_size, offset])
@@ -96,47 +110,66 @@ async def list_contents(
                 code=0,
                 message="success",
                 data=ContentListResponse(
-                    total=total,
-                    page=page,
-                    page_size=page_size,
-                    items=items
-                )
+                    total=total, page=page, page_size=page_size, items=items
+                ),
             )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to query contents: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to query contents: {str(e)}"
+        )
 
 
 @router.get("/{platform}/comments", response_model=APIResponse[CommentListResponse])
 async def list_comments(
     platform: str,
-    note_id: str = Query(..., description="笔记/视频 ID"),
+    note_id: str = Query(..., description="笔记/视频/内容 ID"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
-    conn: aiomysql.Connection = Depends(get_db)
+    conn: aiomysql.Connection = Depends(get_db),
 ):
     """
     查询评论列表
 
     支持的平台: xhs, dy, ks, bili, wb, tieba, zhihu
+
+    注意：不同平台使用不同的关联字段
+    - dy(抖音): aweme_id
+    - bili(B站): video_id
+    - ks(快手): video_id
+    - zhihu(知乎): content_id
+    - 其他平台: note_id
     """
     if platform not in PLATFORM_COMMENT_TABLES:
         raise HTTPException(status_code=400, detail=f"Unsupported platform: {platform}")
 
     table_name = PLATFORM_COMMENT_TABLES[platform]
 
+    # 根据平台确定关联字段名
+    PLATFORM_CONTENT_ID_FIELDS = {
+        "dy": "aweme_id",  # 抖音
+        "bili": "video_id",  # B站
+        "ks": "video_id",  # 快手
+        "zhihu": "content_id",  # 知乎
+        "xhs": "note_id",  # 小红书
+        "wb": "note_id",  # 微博
+        "tieba": "note_id",  # 贴吧
+    }
+
+    content_id_field = PLATFORM_CONTENT_ID_FIELDS.get(platform, "note_id")
+
     try:
         async with conn.cursor(aiomysql.DictCursor) as cursor:
             # 查询总数
-            count_sql = f"SELECT COUNT(*) as total FROM {table_name} WHERE note_id = %s"
+            count_sql = f"SELECT COUNT(*) as total FROM {table_name} WHERE {content_id_field} = %s"
             await cursor.execute(count_sql, (note_id,))
             total_result = await cursor.fetchone()
-            total = total_result['total']
+            total = total_result["total"]
 
             # 查询数据
             offset = (page - 1) * page_size
             data_sql = f"""
                 SELECT * FROM {table_name}
-                WHERE note_id = %s
+                WHERE {content_id_field} = %s
                 ORDER BY add_ts DESC
                 LIMIT %s OFFSET %s
             """
@@ -147,21 +180,18 @@ async def list_comments(
                 code=0,
                 message="success",
                 data=CommentListResponse(
-                    total=total,
-                    page=page,
-                    page_size=page_size,
-                    items=items
-                )
+                    total=total, page=page, page_size=page_size, items=items
+                ),
             )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to query comments: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to query comments: {str(e)}"
+        )
 
 
 @router.get("/{platform}/creators/{user_id}", response_model=APIResponse[dict])
 async def get_creator(
-    platform: str,
-    user_id: str,
-    conn: aiomysql.Connection = Depends(get_db)
+    platform: str, user_id: str, conn: aiomysql.Connection = Depends(get_db)
 ):
     """
     查询创作者信息
@@ -186,4 +216,6 @@ async def get_creator(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to query creator: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to query creator: {str(e)}"
+        )

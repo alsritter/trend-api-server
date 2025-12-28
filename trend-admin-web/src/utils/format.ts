@@ -2,9 +2,14 @@ import dayjs from 'dayjs';
 
 /**
  * 格式化日期时间
+ * 支持秒级和毫秒级时间戳
  */
 export const formatDateTime = (date: string | number): string => {
-  return dayjs(date).format('YYYY-MM-DD HH:mm:ss');
+  if (!date) return '-';
+  const timestamp = typeof date === 'string' ? parseInt(date, 10) : date;
+  // 如果是秒级时间戳（10位数字），转换为毫秒
+  const ms = timestamp.toString().length === 10 ? timestamp * 1000 : timestamp;
+  return dayjs(ms).format('YYYY-MM-DD HH:mm:ss');
 };
 
 /**
@@ -43,4 +48,23 @@ export const formatCountdown = (timestamp: number): string => {
  */
 export const formatNumber = (num: number): string => {
   return num.toLocaleString('zh-CN');
+};
+
+/**
+ * 根据平台获取内容ID
+ * 不同平台的内容ID字段名不同
+ */
+export const getContentId = (platform: string, note: any): string => {
+  const contentIdFields: Record<string, string> = {
+    'dy': 'aweme_id',      // 抖音
+    'bili': 'video_id',    // B站
+    'ks': 'video_id',      // 快手
+    'zhihu': 'content_id', // 知乎
+    'xhs': 'note_id',      // 小红书
+    'wb': 'note_id',       // 微博
+    'tieba': 'note_id',    // 贴吧
+  };
+
+  const fieldName = contentIdFields[platform] || 'note_id';
+  return note[fieldName] || note.note_id || '';
 };

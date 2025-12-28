@@ -85,8 +85,8 @@ function Contents() {
         { title: '评论数', dataIndex: 'comment_count', key: 'comment_count', width: 100 },
         {
           title: '发布时间',
-          dataIndex: 'create_time',
-          key: 'create_time',
+          dataIndex: 'time',
+          key: 'time',
           width: 180,
           render: formatDateTime,
         },
@@ -99,8 +99,8 @@ function Contents() {
         { title: '评论数', dataIndex: 'comment_count', key: 'comment_count', width: 100 },
         {
           title: '发布时间',
-          dataIndex: 'create_time',
-          key: 'create_time',
+          dataIndex: 'time',
+          key: 'time',
           width: 180,
           render: formatDateTime,
         },
@@ -113,8 +113,8 @@ function Contents() {
         { title: '评论数', dataIndex: 'video_comment', key: 'video_comment', width: 100 },
         {
           title: '发布时间',
-          dataIndex: 'create_time',
-          key: 'create_time',
+          dataIndex: 'time',
+          key: 'time',
           width: 180,
           render: formatDateTime,
         },
