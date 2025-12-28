@@ -7,10 +7,138 @@ from celery.utils.log import get_task_logger
 from app.celery_app.celery import celery_app
 from app.config import settings
 from app.utils.crawler_config import merge_task_config
-from app.db.session import db_pool
 from app.db.task_repo import TaskRepository
 
 logger = get_task_logger(__name__)
+
+
+def parse_crawler_progress(line: str, platform: str) -> dict:
+    """
+    解析爬虫日志中的进度信息
+
+    Args:
+        line: 日志行
+        platform: 平台名称 (xhs|dy|ks|bili|wb|tieba|zhihu)
+
+    Returns:
+        dict: 包含进度信息的字典，可能包含以下字段:
+            - type: 进度类型 (keyword|page|count|max|finished)
+            - keyword: 当前关键词
+            - page: 当前页码
+            - count: 已处理数量
+            - message: 进度消息
+    """
+    result = {}
+
+    # 通用模式 - 适用于所有平台
+    # 1. 检测当前搜索关键词
+    if "Current search keyword:" in line or "当前搜索关键词:" in line:
+        parts = line.split(
+            "Current search keyword:"
+            if "Current search keyword:" in line
+            else "当前搜索关键词:"
+        )
+        if len(parts) > 1:
+            result["type"] = "keyword"
+            result["keyword"] = parts[1].strip()
+            result["message"] = f"Searching keyword '{result['keyword']}'"
+
+    # 2. 检测搜索页码 - 适配多种平台格式
+    elif any(
+        pattern in line
+        for pattern in [
+            "page:",
+            "页码:",
+            "第",
+            "Page:",
+            "search xhs keyword:",
+            "search douyin keyword:",
+            "search bilibili keyword:",
+            "search weibo keyword:",
+            "search tieba keyword:",
+            "search kuaishou keyword:",
+            "search zhihu keyword:",
+        ]
+    ):
+        # 尝试提取页码
+        import re
+
+        page_patterns = [
+            r"page[:\s]+(\d+)",
+            r"页码[:\s]+(\d+)",
+            r"第\s*(\d+)\s*页",
+            r"Page[:\s]+(\d+)",
+        ]
+        for pattern in page_patterns:
+            match = re.search(pattern, line, re.IGNORECASE)
+            if match:
+                result["type"] = "page"
+                result["page"] = int(match.group(1))
+                break
+
+    # 3. 检测搜索结果数量 - 适配多种平台格式
+    elif any(
+        pattern in line
+        for pattern in [
+            "Search notes res count:",
+            "Search video res count:",
+            "Search content res count:",
+            "搜索结果数量:",
+            "res count:",
+            "results count:",
+        ]
+    ):
+        import re
+
+        # 提取数字
+        count_patterns = [
+            r"count[:\s]+(\d+)",
+            r"数量[:\s]+(\d+)",
+        ]
+        for pattern in count_patterns:
+            match = re.search(pattern, line, re.IGNORECASE)
+            if match:
+                result["type"] = "count"
+                result["count"] = int(match.group(1))
+                break
+
+    # 4. 检测达到最大数量
+    elif any(
+        pattern in line for pattern in ["Reached max", "达到最大", "maximum", "已完成"]
+    ):
+        result["type"] = "max"
+        result["message"] = "Reached maximum crawl count"
+
+    # 5. 检测完成状态
+    elif any(
+        pattern in line
+        for pattern in [
+            "Crawler finished",
+            "finished ...",
+            "crawl completed",
+            "爬取完成",
+            "任务完成",
+        ]
+    ):
+        result["type"] = "finished"
+        result["message"] = "Crawler task finishing"
+
+    # 6. 检测详情页爬取 (detail 模式)
+    elif "Get note detail" in line or "获取详情" in line:
+        result["type"] = "detail"
+        result["message"] = "Processing detail page"
+
+    # 7. 检测评论爬取进度
+    elif "comments" in line.lower() and ("count" in line.lower() or "数量" in line):
+        import re
+
+        match = re.search(r"(\d+)", line)
+        if match:
+            result["type"] = "comments"
+            result["count"] = int(match.group(1))
+            result["message"] = f"Processing comments: {result['count']}"
+
+    return result
 
 
 def get_event_loop():
@@ -29,11 +157,14 @@ def get_event_loop():
 async def update_task_status_async(task_id: str, **kwargs):
     """异步更新任务状态到数据库"""
     try:
-        if db_pool is None:
+        # 动态导入 db_pool，避免导入时的快照问题
+        from app.db import session
+
+        if session.db_pool is None:
             logger.warning("Database pool not initialized, skip task status update")
             return
 
-        async with db_pool.acquire() as conn:
+        async with session.db_pool.acquire() as conn:
             repo = TaskRepository(conn)
             await repo.update_task_status(task_id, **kwargs)
     except Exception as e:
@@ -212,7 +343,7 @@ def run_crawler(
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.STDOUT,  # 将 stderr 重定向到 stdout，这样可以实时捕获所有日志
             env=env,
             cwd=settings.CRAWLER_BASE_PATH,
             text=True,
@@ -221,7 +352,12 @@ def run_crawler(
 
         # 实时读取输出并更新进度
         stdout_lines = []
-        stderr_lines = []
+
+        # 进度跟踪变量
+        notes_count = 0  # 已爬取的笔记数量
+        max_notes = max_notes_count  # 最大爬取数量
+        current_keyword = ""  # 当前关键词
+        current_page = 0  # 当前页码
 
         while True:
             output = process.stdout.readline()
@@ -232,31 +368,78 @@ def run_crawler(
                 stdout_lines.append(line)
                 logger.info(f"Crawler output: {line}")
 
-                # 尝试从日志中解析进度（假设爬虫会输出进度信息）
-                # 例如: "Progress: 50/100" 或其他格式
-                if "Progress:" in line:
-                    try:
-                        parts = line.split("Progress:")[1].strip().split("/")
-                        current = int(parts[0])
-                        total = int(parts[1])
-                        self.update_progress(current, total)
-                        
-                        # 更新数据库中的进度
+                # 解析爬虫日志中的关键信息来跟踪进度
+                try:
+                    progress_info = parse_crawler_progress(line, platform)
+
+                    if not progress_info:
+                        continue
+
+                    progress_type = progress_info.get("type")
+
+                    # 处理关键词变化
+                    if progress_type == "keyword":
+                        current_keyword = progress_info.get("keyword", "")
+                        logger.info(f"Progress: {progress_info.get('message', '')}")
+
+                    # 处理页码变化
+                    elif progress_type == "page":
+                        current_page = progress_info.get("page", 0)
+
+                    # 处理爬取数量增加
+                    elif progress_type == "count":
+                        count = progress_info.get("count", 0)
+                        notes_count += count
+
+                        # 计算并更新进度
+                        percentage = (
+                            min(int((notes_count / max_notes) * 100), 100)
+                            if max_notes > 0
+                            else 0
+                        )
+
+                        self.update_progress(notes_count, max_notes)
                         update_task_status_sync(
                             self.request.id,
                             status="PROGRESS",
-                            progress_current=current,
-                            progress_total=total,
-                            progress_percentage=int((current / total) * 100) if total > 0 else 0,
+                            progress_current=notes_count,
+                            progress_total=max_notes,
+                            progress_percentage=percentage,
                         )
-                    except Exception as e:
-                        logger.debug(f"Failed to parse progress: {e}")
 
-        # 读取剩余的 stderr
-        stderr_output = process.stderr.read()
-        if stderr_output:
-            stderr_lines.append(stderr_output)
-            logger.error(f"Crawler stderr: {stderr_output}")
+                        logger.info(
+                            f"Progress: {notes_count}/{max_notes} items ({percentage}%) "
+                            f"- Keyword: '{current_keyword}', Page: {current_page}"
+                        )
+
+                    # 处理达到最大数量
+                    elif progress_type == "max":
+                        logger.info(f"Progress: {progress_info.get('message', '')}")
+                        update_task_status_sync(
+                            self.request.id,
+                            status="PROGRESS",
+                            progress_current=max_notes,
+                            progress_total=max_notes,
+                            progress_percentage=100,
+                        )
+
+                    # 处理完成状态
+                    elif progress_type == "finished":
+                        logger.info(f"Progress: {progress_info.get('message', '')}")
+                        update_task_status_sync(
+                            self.request.id,
+                            status="PROGRESS",
+                            progress_current=max_notes,
+                            progress_total=max_notes,
+                            progress_percentage=100,
+                        )
+
+                    # 处理其他类型 (detail, comments等)
+                    elif progress_type in ("detail", "comments"):
+                        logger.info(f"Progress: {progress_info.get('message', '')}")
+
+                except Exception as e:
+                    logger.debug(f"Failed to parse progress from log: {e}")
 
         return_code = process.poll()
 
@@ -267,23 +450,32 @@ def run_crawler(
                 "platform": platform,
                 "crawler_type": crawler_type,
                 "keywords": keywords,
+                "notes_crawled": notes_count,  # 实际爬取的笔记数量
+                "max_notes": max_notes,  # 最大爬取数量
+                "last_keyword": current_keyword,  # 最后处理的关键词
+                "last_page": current_page,  # 最后处理的页码
                 "stdout": "\n".join(stdout_lines[-50:]),  # 只保留最后50行
-                "message": "Crawler task completed successfully",
+                "message": f"Crawler task completed successfully. Crawled {notes_count} notes.",
             }
-            
+
             # 更新任务状态为 SUCCESS
             update_task_status_sync(
                 self.request.id,
                 status="SUCCESS",
                 result=result,
+                progress_current=notes_count,
+                progress_total=max_notes,
+                progress_percentage=100,
                 finished_at=datetime.now(),
             )
-            
+
             return result
         else:
-            error_msg = "\n".join(stderr_lines) if stderr_lines else "Unknown error"
+            error_msg = (
+                "\n".join(stdout_lines[-20:]) if stdout_lines else "Unknown error"
+            )
             logger.error(f"Crawler task failed with code {return_code}: {error_msg}")
-            
+
             # 更新任务状态为 FAILURE
             update_task_status_sync(
                 self.request.id,
@@ -291,14 +483,14 @@ def run_crawler(
                 error=f"Crawler failed with return code {return_code}: {error_msg}",
                 finished_at=datetime.now(),
             )
-            
+
             raise Exception(
                 f"Crawler failed with return code {return_code}: {error_msg}"
             )
 
     except Exception as e:
         logger.error(f"Crawler task error: {str(e)}")
-        
+
         # 更新任务状态为 FAILURE
         update_task_status_sync(
             self.request.id,
@@ -306,7 +498,7 @@ def run_crawler(
             error=str(e),
             finished_at=datetime.now(),
         )
-        
+
         raise
 
 
@@ -315,12 +507,12 @@ def stop_crawler(task_id: str):
     """停止正在运行的爬虫任务"""
     logger.info(f"Stopping crawler task: {task_id}")
     celery_app.control.revoke(task_id, terminate=True, signal="SIGKILL")
-    
+
     # 更新任务状态为 REVOKED
     update_task_status_sync(
         task_id,
         status="REVOKED",
         finished_at=datetime.now(),
     )
-    
+
     return {"status": "terminated", "task_id": task_id}

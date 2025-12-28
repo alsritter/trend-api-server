@@ -10,7 +10,7 @@ RUN npm ci
 RUN npm run build
 
 # Python 基础镜像
-FROM python:3.9.19-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -29,29 +29,33 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     libffi-dev \
     supervisor \
+    curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# 安装 uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # 复制 MediaCrawlerPro-Python (从子模块)
 COPY MediaCrawlerPro-Python /app/MediaCrawlerPro-Python
 
 # 安装 MediaCrawlerPro-Python 依赖
 WORKDIR /app/MediaCrawlerPro-Python
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN uv pip install --system --no-cache -r pyproject.toml
 
 # 复制 MediaCrawlerPro-SignSrv (从子模块)
 COPY MediaCrawlerPro-SignSrv /app/MediaCrawlerPro-SignSrv
 
 # 安装 MediaCrawlerPro-SignSrv 依赖
 WORKDIR /app/MediaCrawlerPro-SignSrv
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN uv pip install --system --no-cache -r pyproject.toml
 
 # 复制 trend-api-server
 COPY . /app/trend-api-server
 WORKDIR /app/trend-api-server
 
 # 安装 API Server 依赖
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN uv pip install --system --no-cache -r pyproject.toml
 
 # 复制前端构建产物
 COPY --from=frontend-builder /app/static/web /app/trend-api-server/static/web

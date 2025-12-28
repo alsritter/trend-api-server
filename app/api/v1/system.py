@@ -113,33 +113,164 @@ async def database_stats(conn: aiomysql.Connection = Depends(get_db)):
     """
     数据库统计信息
 
-    返回各平台爬取的内容数量
+    返回各平台爬取的内容数量，按平台分组
     """
     try:
         stats = {}
         async with conn.cursor(aiomysql.DictCursor) as cursor:
-            # 统计各平台内容数量
-            tables = [
-                ("xhs_notes", "SELECT COUNT(*) as count FROM xhs_note"),
-                ("xhs_comments", "SELECT COUNT(*) as count FROM xhs_note_comment"),
-                ("dy_videos", "SELECT COUNT(*) as count FROM douyin_aweme"),
-                ("dy_comments", "SELECT COUNT(*) as count FROM douyin_aweme_comment"),
-                ("bili_videos", "SELECT COUNT(*) as count FROM bilibili_video"),
-                ("bili_comments", "SELECT COUNT(*) as count FROM bilibili_video_comment"),
-                ("ks_videos", "SELECT COUNT(*) as count FROM kuaishou_video"),
-                ("wb_notes", "SELECT COUNT(*) as count FROM weibo_note"),
-                ("tieba_notes", "SELECT COUNT(*) as count FROM tieba_note"),
-                ("zhihu_contents", "SELECT COUNT(*) as count FROM zhihu_content"),
-                ("accounts", "SELECT COUNT(*) as count FROM crawler_cookies_account"),
-            ]
+            # 小红书统计
+            xhs_stats = {"notes": 0, "comments": 0, "creators": 0}
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM xhs_note")
+                result = await cursor.fetchone()
+                xhs_stats["notes"] = result['count']
+            except Exception:
+                pass
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM xhs_note_comment")
+                result = await cursor.fetchone()
+                xhs_stats["comments"] = result['count']
+            except Exception:
+                pass
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM xhs_creator")
+                result = await cursor.fetchone()
+                xhs_stats["creators"] = result['count']
+            except Exception:
+                pass
+            stats["xhs"] = xhs_stats
 
-            for name, sql in tables:
-                try:
-                    await cursor.execute(sql)
-                    result = await cursor.fetchone()
-                    stats[name] = result['count']
-                except Exception:
-                    stats[name] = 0  # 表可能不存在
+            # 抖音统计
+            dy_stats = {"notes": 0, "comments": 0, "creators": 0}
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM douyin_aweme")
+                result = await cursor.fetchone()
+                dy_stats["notes"] = result['count']
+            except Exception:
+                pass
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM douyin_aweme_comment")
+                result = await cursor.fetchone()
+                dy_stats["comments"] = result['count']
+            except Exception:
+                pass
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM dy_creator")
+                result = await cursor.fetchone()
+                dy_stats["creators"] = result['count']
+            except Exception:
+                pass
+            stats["dy"] = dy_stats
+
+            # 哔哩哔哩统计
+            bili_stats = {"notes": 0, "comments": 0, "creators": 0}
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM bilibili_video")
+                result = await cursor.fetchone()
+                bili_stats["notes"] = result['count']
+            except Exception:
+                pass
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM bilibili_video_comment")
+                result = await cursor.fetchone()
+                bili_stats["comments"] = result['count']
+            except Exception:
+                pass
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM bilibili_up_info")
+                result = await cursor.fetchone()
+                bili_stats["creators"] = result['count']
+            except Exception:
+                pass
+            stats["bili"] = bili_stats
+
+            # 快手统计
+            ks_stats = {"notes": 0, "comments": 0, "creators": 0}
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM kuaishou_video")
+                result = await cursor.fetchone()
+                ks_stats["notes"] = result['count']
+            except Exception:
+                pass
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM kuaishou_video_comment")
+                result = await cursor.fetchone()
+                ks_stats["comments"] = result['count']
+            except Exception:
+                pass
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM kuaishou_creator")
+                result = await cursor.fetchone()
+                ks_stats["creators"] = result['count']
+            except Exception:
+                pass
+            stats["ks"] = ks_stats
+
+            # 微博统计
+            wb_stats = {"notes": 0, "comments": 0, "creators": 0}
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM weibo_note")
+                result = await cursor.fetchone()
+                wb_stats["notes"] = result['count']
+            except Exception:
+                pass
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM weibo_note_comment")
+                result = await cursor.fetchone()
+                wb_stats["comments"] = result['count']
+            except Exception:
+                pass
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM weibo_creator")
+                result = await cursor.fetchone()
+                wb_stats["creators"] = result['count']
+            except Exception:
+                pass
+            stats["wb"] = wb_stats
+
+            # 百度贴吧统计
+            tieba_stats = {"notes": 0, "comments": 0, "creators": 0}
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM tieba_note")
+                result = await cursor.fetchone()
+                tieba_stats["notes"] = result['count']
+            except Exception:
+                pass
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM tieba_comment")
+                result = await cursor.fetchone()
+                tieba_stats["comments"] = result['count']
+            except Exception:
+                pass
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM tieba_creator")
+                result = await cursor.fetchone()
+                tieba_stats["creators"] = result['count']
+            except Exception:
+                pass
+            stats["tieba"] = tieba_stats
+
+            # 知乎统计
+            zhihu_stats = {"notes": 0, "comments": 0, "creators": 0}
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM zhihu_content")
+                result = await cursor.fetchone()
+                zhihu_stats["notes"] = result['count']
+            except Exception:
+                pass
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM zhihu_comment")
+                result = await cursor.fetchone()
+                zhihu_stats["comments"] = result['count']
+            except Exception:
+                pass
+            try:
+                await cursor.execute("SELECT COUNT(*) as count FROM zhihu_creator")
+                result = await cursor.fetchone()
+                zhihu_stats["creators"] = result['count']
+            except Exception:
+                pass
+            stats["zhihu"] = zhihu_stats
 
         return APIResponse(
             code=0,

@@ -1,4 +1,6 @@
+import asyncio
 from celery import Celery
+from celery.signals import worker_ready, worker_shutdown
 from app.config import settings
 
 # 创建 Celery 实例
@@ -30,3 +32,36 @@ celery_app.conf.task_routes = {
     "tasks.run_crawler": {"queue": "crawler_queue"},
     "tasks.stop_crawler": {"queue": "control_queue"},
 }
+
+
+# Celery Worker 启动时初始化数据库连接池
+# 注意：FastAPI 和 Celery Worker 是两个独立的进程，不共享内存
+# 即使 main.py 中初始化了数据库，Celery Worker 也需要单独初始化
+@worker_ready.connect
+def init_worker_db(**kwargs):
+    """在 Celery worker 启动时初始化数据库连接池"""
+    from app.db.session import init_db
+    
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    try:
+        loop.run_until_complete(init_db())
+        print("[Celery Worker] Database pool initialized successfully")
+    except Exception as e:
+        print(f"[Celery Worker] Failed to initialize database pool: {e}")
+        raise
+
+
+# Celery Worker 关闭时清理数据库连接池
+@worker_shutdown.connect
+def shutdown_worker_db(**kwargs):
+    """在 Celery worker 关闭时清理数据库连接池"""
+    from app.db.session import close_db
+    
+    try:
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(close_db())
+        print("[Celery Worker] Database pool closed successfully")
+    except Exception as e:
+        print(f"[Celery Worker] Failed to close database pool: {e}")

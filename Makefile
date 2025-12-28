@@ -7,7 +7,7 @@
 DOCKER_COMPOSE = docker-compose
 DOCKER = docker
 PYTHON = python3
-PIP = pip3
+UV = uv
 
 # 项目名称和镜像名称
 PROJECT_NAME = trend-api-server
@@ -47,10 +47,58 @@ init: ## 快速初始化项目环境（Git 子模块 + 配置文件 + Python 依
 	@echo "${GREEN}环境初始化完成！${RESET}"
 	@echo "${YELLOW}提示: 请检查 .env 文件中的配置是否正确${RESET}"
 
-install: ## 安装本地开发 Python 依赖
-	@echo "${GREEN}安装 Python 依赖...${RESET}"
-	$(PIP) install -r requirements.txt
-	@echo "${GREEN}依赖安装完成！${RESET}"
+install: ## 安装本地开发 Python 依赖（包含主项目和所有子项目）
+	@echo "${GREEN}安装 Python 依赖（主项目 + 子项目）...${RESET}"
+	@echo "${YELLOW}1. 同步主项目依赖...${RESET}"
+	$(UV) sync
+	@echo "${GREEN}✓ 主项目依赖安装完成${RESET}"
+	@echo "${YELLOW}2. 将 MediaCrawlerPro-Python 依赖安装到主虚拟环境...${RESET}"
+	@if [ -d "MediaCrawlerPro-Python" ] && [ -f "MediaCrawlerPro-Python/pyproject.toml" ]; then \
+		cd MediaCrawlerPro-Python && \
+		$(UV) export --no-hashes | tail -n +2 > /tmp/mcp_reqs.txt && \
+		cd .. && \
+		$(UV) pip install -r /tmp/mcp_reqs.txt && \
+		rm /tmp/mcp_reqs.txt && \
+		echo "${GREEN}✓ MediaCrawlerPro-Python 依赖已安装${RESET}"; \
+	else \
+		echo "${YELLOW}! MediaCrawlerPro-Python 目录不存在，跳过${RESET}"; \
+	fi
+	@echo "${YELLOW}3. 将 MediaCrawlerPro-SignSrv 依赖安装到主虚拟环境...${RESET}"
+	@if [ -d "MediaCrawlerPro-SignSrv" ] && [ -f "MediaCrawlerPro-SignSrv/pyproject.toml" ]; then \
+		cd MediaCrawlerPro-SignSrv && \
+		$(UV) export --no-hashes | tail -n +2 > /tmp/signsrv_reqs.txt && \
+		cd .. && \
+		$(UV) pip install -r /tmp/signsrv_reqs.txt && \
+		rm /tmp/signsrv_reqs.txt && \
+		echo "${GREEN}✓ MediaCrawlerPro-SignSrv 依赖已安装${RESET}"; \
+	else \
+		echo "${YELLOW}! MediaCrawlerPro-SignSrv 目录不存在，跳过${RESET}"; \
+	fi
+	@echo "${GREEN}所有依赖安装完成！${RESET}"
+	@echo "${YELLOW}提示: uv 已创建虚拟环境，使用 'source .venv/bin/activate' 激活${RESET}"
+
+
+add: ## 添加新依赖包 (使用方法: make add PACKAGE=package_name)
+	@if [ -z "$(PACKAGE)" ]; then \
+		echo "${YELLOW}使用方法: make add PACKAGE=package_name${RESET}"; \
+		exit 1; \
+	fi
+	@echo "${GREEN}添加依赖: $(PACKAGE)${RESET}"
+	$(UV) add $(PACKAGE)
+
+run: ## 在虚拟环境中运行 Python 命令 (使用方法: make run CMD="python script.py")
+	@if [ -z "$(CMD)" ]; then \
+		echo "${YELLOW}使用方法: make run CMD=\"your command\"${RESET}"; \
+		exit 1; \
+	fi
+	$(UV) run $(CMD)
+
+shell-venv: ## 激活虚拟环境的提示
+	@echo "${YELLOW}激活虚拟环境:${RESET}"
+	@echo "  source .venv/bin/activate"
+	@echo ""
+	@echo "${YELLOW}或使用 uv run 直接运行命令:${RESET}"
+	@echo "  uv run python your_script.py"
 
 ##@ Docker 镜像管理
 

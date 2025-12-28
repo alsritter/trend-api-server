@@ -6,6 +6,27 @@ MediaCrawlerPro API Server - 多平台社交媒体数据采集 HTTP API 服务
 
 Trend API Server 是对 MediaCrawlerPro-Python 爬虫的 HTTP API 封装，提供异步任务调度、账号管理、内容查询等功能。
 
+## 依赖管理
+
+本项目使用 [uv](https://docs.astral.sh/uv/) 作为依赖管理工具，相比传统的 pip，uv 提供：
+- ⚡ 10-100倍更快的安装速度
+- 🔒 更可靠的依赖解析
+- 📦 统一的 pyproject.toml 配置
+
+### 安装 uv
+
+**macOS/Linux:**
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**或使用 Homebrew:**
+```bash
+brew install uv
+```
+
+详细迁移说明请参考 [UV_MIGRATION.md](UV_MIGRATION.md)
+
 ## Git 子模块管理
 
 本项目使用 git 子模块 (submodules) 来管理依赖项目：
@@ -104,8 +125,18 @@ cd trend-api-server
 
 2. **安装依赖**
 
+使用 Makefile（推荐）：
 ```bash
-pip install -r requirements.txt
+make install
+```
+
+或直接使用 uv：
+```bash
+# uv sync 会自动创建虚拟环境并安装依赖
+uv sync
+
+# 激活虚拟环境
+source .venv/bin/activate
 ```
 
 3. **配置环境变量**
@@ -376,7 +407,8 @@ SIGN_SRV_PORT=8989
 使用 Flower 监控工具：
 
 ```bash
-pip install flower
+uv add flower
+# 或在虚拟环境中
 celery -A app.celery_app.celery flower --port=5555
 ```
 
