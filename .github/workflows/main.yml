@@ -26,3 +26,4 @@ jobs:
       ALIYUN_PASSWORD_K8S: ${{ secrets.ALIYUN_PASSWORD_K8S }}
       KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
       WECHAT_WORK_BOT_WEBHOOK: ${{ secrets.WECHAT_WORK_BOT_WEBHOOK }}
+      GH_PAT: ${{ secrets.GH_PAT }}
