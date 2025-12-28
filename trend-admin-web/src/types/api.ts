@@ -92,6 +92,23 @@ export interface TaskCreateRequest {
   enable_comments: boolean;
   enable_sub_comments: boolean;
   max_comments_count: number;
+  
+  // 平台特定的指定ID/URL列表
+  xhs_note_url_list?: string[];
+  xhs_creator_url_list?: string[];
+  weibo_specified_id_list?: string[];
+  weibo_creator_id_list?: string[];
+  tieba_specified_id_list?: string[];
+  tieba_name_list?: string[];
+  tieba_creator_url_list?: string[];
+  bili_creator_id_list?: string[];
+  bili_specified_id_list?: string[];
+  dy_specified_id_list?: string[];
+  dy_creator_id_list?: string[];
+  ks_specified_id_list?: string[];
+  ks_creator_id_list?: string[];
+  zhihu_creator_url_list?: string[];
+  zhihu_specified_id_list?: string[];
 }
 
 export interface TaskProgress {

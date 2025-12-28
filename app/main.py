@@ -32,7 +32,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
 # CORS 中间件
@@ -60,7 +60,11 @@ STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static", "web")
 
 # 挂载静态资源（如果目录存在）
 if os.path.exists(os.path.join(STATIC_DIR, "assets")):
-    app.mount("/assets", StaticFiles(directory=os.path.join(STATIC_DIR, "assets")), name="assets")
+    app.mount(
+        "/assets",
+        StaticFiles(directory=os.path.join(STATIC_DIR, "assets")),
+        name="assets",
+    )
 
 
 @app.get("/")
@@ -75,7 +79,7 @@ async def root():
     return {
         "message": "Welcome to Trend API Server",
         "docs": "/docs",
-        "health": "/api/v1/health"
+        "health": "/api/v1/health",
     }
 
 
@@ -87,7 +91,11 @@ async def serve_frontend(full_path: str):
     所有非 API 路径返回前端应用的 index.html，支持前端路由
     """
     # API 路径不处理（返回 404）
-    if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("redoc"):
+    if (
+        full_path.startswith("api/")
+        or full_path.startswith("docs")
+        or full_path.startswith("redoc")
+    ):
         return {"error": "Not found"}
 
     # 尝试直接返回文件
@@ -105,9 +113,7 @@ async def serve_frontend(full_path: str):
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
-        "app.main:app",
-        host=settings.API_HOST,
-        port=settings.API_PORT,
-        reload=False
+        "app.main:app", host=settings.API_HOST, port=settings.API_PORT, reload=False
     )

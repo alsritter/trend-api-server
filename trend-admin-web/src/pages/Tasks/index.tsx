@@ -9,9 +9,10 @@ import {
   Select,
   InputNumber,
   Switch,
-  message
+  message,
+  Divider
 } from "antd";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { tasksApi } from "@/api/tasks";
 import {
   PLATFORM_OPTIONS,
@@ -26,6 +27,17 @@ function Tasks() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
+  const [selectedPlatform, setSelectedPlatform] = useState<string>("");
+  const [selectedCrawlerType, setSelectedCrawlerType] = useState<string>("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+
+  // 查询任务列表
+  const { data: tasksData, isLoading } = useQuery({
+    queryKey: ["tasks", currentPage, pageSize],
+    queryFn: () => tasksApi.list({ page: currentPage, page_size: pageSize }),
+    refetchInterval: 5000 // 每5秒自动刷新
+  });
 
   // 创建任务
   const createMutation = useMutation({
@@ -34,7 +46,7 @@ function Tasks() {
       message.success(`任务创建成功！任务ID: ${data.task_id}`);
       setIsModalOpen(false);
       form.resetFields();
-      // 刷新任务列表（如果API已实现）
+      // 刷新任务列表
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
     }
   });
@@ -48,8 +60,38 @@ function Tasks() {
     }
   });
 
-  const handleSubmit = (values: TaskCreateRequest) => {
-    createMutation.mutate(values);
+  const handleSubmit = (values: any) => {
+    // 转换文本区域输入为数组（每行一个元素）
+    const processListField = (field: string) => {
+      if (values[field]) {
+        return values[field]
+          .split("\n")
+          .map((item: string) => item.trim())
+          .filter((item: string) => item.length > 0);
+      }
+      return undefined;
+    };
+
+    const requestData: TaskCreateRequest = {
+      ...values,
+      xhs_note_url_list: processListField("xhs_note_url_list"),
+      xhs_creator_url_list: processListField("xhs_creator_url_list"),
+      weibo_specified_id_list: processListField("weibo_specified_id_list"),
+      weibo_creator_id_list: processListField("weibo_creator_id_list"),
+      tieba_specified_id_list: processListField("tieba_specified_id_list"),
+      tieba_name_list: processListField("tieba_name_list"),
+      tieba_creator_url_list: processListField("tieba_creator_url_list"),
+      bili_creator_id_list: processListField("bili_creator_id_list"),
+      bili_specified_id_list: processListField("bili_specified_id_list"),
+      dy_specified_id_list: processListField("dy_specified_id_list"),
+      dy_creator_id_list: processListField("dy_creator_id_list"),
+      ks_specified_id_list: processListField("ks_specified_id_list"),
+      ks_creator_id_list: processListField("ks_creator_id_list"),
+      zhihu_creator_url_list: processListField("zhihu_creator_url_list"),
+      zhihu_specified_id_list: processListField("zhihu_specified_id_list")
+    };
+
+    createMutation.mutate(requestData);
   };
 
   const handleStop = (taskId: string) => {
@@ -61,6 +103,255 @@ function Tasks() {
       cancelText: "取消",
       onOk: () => stopMutation.mutate(taskId)
     });
+  };
+
+  // 根据平台和爬虫类型渲染特定字段
+  const renderPlatformSpecificFields = (
+    platform: string,
+    crawlerType: string
+  ) => {
+    if (!platform) return null;
+
+    const fields: JSX.Element[] = [];
+
+    // 小红书
+    if (platform === "xhs") {
+      if (crawlerType === "detail") {
+        fields.push(
+          <Form.Item
+            key="xhs_note_url_list"
+            name="xhs_note_url_list"
+            label="小红书笔记 URL 列表"
+            tooltip="每行一个完整的笔记URL（需包含 xsec_token 和 xsec_source 参数）"
+          >
+            <Input.TextArea
+              rows={4}
+              placeholder="https://www.xiaohongshu.com/explore/xxx?xsec_token=xxx&xsec_source=pc_feed"
+            />
+          </Form.Item>
+        );
+      } else if (crawlerType === "creator") {
+        fields.push(
+          <Form.Item
+            key="xhs_creator_url_list"
+            name="xhs_creator_url_list"
+            label="小红书创作者 URL 列表"
+            tooltip="每行一个完整的创作者主页URL（需包含 xsec_token 和 xsec_source 参数）"
+          >
+            <Input.TextArea
+              rows={4}
+              placeholder="https://www.xiaohongshu.com/user/profile/xxx?xsec_token=xxx&xsec_source=pc_search"
+            />
+          </Form.Item>
+        );
+      }
+    }
+
+    // 微博
+    if (platform === "wb") {
+      if (crawlerType === "detail") {
+        fields.push(
+          <Form.Item
+            key="weibo_specified_id_list"
+            name="weibo_specified_id_list"
+            label="微博帖子 ID 列表"
+            tooltip="每行一个帖子ID"
+          >
+            <Input.TextArea rows={4} placeholder="5180657661643376" />
+          </Form.Item>
+        );
+      } else if (crawlerType === "creator") {
+        fields.push(
+          <Form.Item
+            key="weibo_creator_id_list"
+            name="weibo_creator_id_list"
+            label="微博创作者 ID 列表"
+            tooltip="每行一个创作者ID"
+          >
+            <Input.TextArea rows={4} placeholder="2172061270" />
+          </Form.Item>
+        );
+      }
+    }
+
+    // 贴吧
+    if (platform === "tieba") {
+      if (crawlerType === "detail") {
+        fields.push(
+          <Form.Item
+            key="tieba_specified_id_list"
+            name="tieba_specified_id_list"
+            label="贴吧帖子 ID 列表"
+            tooltip="每行一个帖子ID"
+          >
+            <Input.TextArea rows={4} placeholder="9815127841" />
+          </Form.Item>
+        );
+      } else if (crawlerType === "creator") {
+        fields.push(
+          <Form.Item
+            key="tieba_creator_url_list"
+            name="tieba_creator_url_list"
+            label="贴吧创作者 URL 列表"
+            tooltip="每行一个完整的创作者主页URL"
+          >
+            <Input.TextArea
+              rows={4}
+              placeholder="https://tieba.baidu.com/home/main/?id=tb.1.xxx&fr=frs"
+            />
+          </Form.Item>
+        );
+      }
+      // 贴吧名称列表（适用于搜索类型）
+      if (crawlerType === "search") {
+        fields.push(
+          <Form.Item
+            key="tieba_name_list"
+            name="tieba_name_list"
+            label="贴吧名称列表"
+            tooltip="每行一个贴吧名称"
+          >
+            <Input.TextArea rows={4} placeholder="盗墓笔记" />
+          </Form.Item>
+        );
+      }
+    }
+
+    // B站
+    if (platform === "bili") {
+      if (crawlerType === "detail") {
+        fields.push(
+          <Form.Item
+            key="bili_specified_id_list"
+            name="bili_specified_id_list"
+            label="B站视频 BVID 列表"
+            tooltip="每行一个视频BVID"
+          >
+            <Input.TextArea rows={4} placeholder="BV1d54y1g7db" />
+          </Form.Item>
+        );
+      } else if (crawlerType === "creator") {
+        fields.push(
+          <Form.Item
+            key="bili_creator_id_list"
+            name="bili_creator_id_list"
+            label="B站创作者 ID 列表"
+            tooltip="每行一个UP主ID"
+          >
+            <Input.TextArea rows={4} placeholder="434377496" />
+          </Form.Item>
+        );
+      }
+    }
+
+    // 抖音
+    if (platform === "dy") {
+      if (crawlerType === "detail") {
+        fields.push(
+          <Form.Item
+            key="dy_specified_id_list"
+            name="dy_specified_id_list"
+            label="抖音视频 ID 列表"
+            tooltip="每行一个视频ID"
+          >
+            <Input.TextArea rows={4} placeholder="7566756334578830627" />
+          </Form.Item>
+        );
+      } else if (crawlerType === "creator") {
+        fields.push(
+          <Form.Item
+            key="dy_creator_id_list"
+            name="dy_creator_id_list"
+            label="抖音创作者 ID 列表"
+            tooltip="每行一个创作者sec_id"
+          >
+            <Input.TextArea
+              rows={4}
+              placeholder="MS4wLjABAAAATJPY7LAlaa5X-c8uNdWkvz0jUGgpw4eeXIwu_8BhvqE"
+            />
+          </Form.Item>
+        );
+      }
+    }
+
+    // 快手
+    if (platform === "ks") {
+      if (crawlerType === "detail") {
+        fields.push(
+          <Form.Item
+            key="ks_specified_id_list"
+            name="ks_specified_id_list"
+            label="快手视频 ID 列表"
+            tooltip="每行一个视频ID"
+          >
+            <Input.TextArea rows={4} placeholder="3xf8enb8dbj6uig" />
+          </Form.Item>
+        );
+      } else if (crawlerType === "creator") {
+        fields.push(
+          <Form.Item
+            key="ks_creator_id_list"
+            name="ks_creator_id_list"
+            label="快手创作者 ID 列表"
+            tooltip="每行一个创作者ID"
+          >
+            <Input.TextArea rows={4} placeholder="3x4sm73aye7jq7i" />
+          </Form.Item>
+        );
+      }
+    }
+
+    // 知乎
+    if (platform === "zhihu") {
+      if (crawlerType === "detail") {
+        fields.push(
+          <Form.Item
+            key="zhihu_specified_id_list"
+            name="zhihu_specified_id_list"
+            label="知乎内容 URL 列表"
+            tooltip="每行一个完整的内容URL（支持回答、文章、视频、问题）"
+          >
+            <Input.TextArea
+              rows={4}
+              placeholder="https://www.zhihu.com/question/826896610/answer/4885821440"
+            />
+          </Form.Item>
+        );
+      } else if (crawlerType === "creator") {
+        fields.push(
+          <Form.Item
+            key="zhihu_creator_url_list"
+            name="zhihu_creator_url_list"
+            label="知乎创作者 URL 列表"
+            tooltip="每行一个完整的创作者主页URL"
+          >
+            <Input.TextArea
+              rows={4}
+              placeholder="https://www.zhihu.com/people/yd1234567"
+            />
+          </Form.Item>
+        );
+      }
+    }
+
+    if (crawlerType === "search") {
+      fields.push(
+        <Form.Item
+          name="keywords"
+          label="关键词"
+          tooltip="多个关键词用逗号分隔"
+        >
+          <Input placeholder="例如: 美食,旅游,摄影" />
+        </Form.Item>
+      );
+    }
+
+    return fields.length > 0 ? (
+      <>
+        <Divider orientation="left">平台特定配置</Divider>
+        {fields}
+      </>
+    ) : null;
   };
 
   const columns = [
@@ -140,12 +431,19 @@ function Tasks() {
       >
         <Table
           columns={columns}
-          dataSource={[]}
+          dataSource={tasksData?.items || []}
           rowKey="task_id"
-          pagination={{ pageSize: 20 }}
-          locale={{
-            emptyText:
-              "暂无任务数据。注意：任务列表 API 可能尚未实现，请通过任务 ID 查询单个任务状态。"
+          loading={isLoading}
+          pagination={{
+            current: currentPage,
+            pageSize: pageSize,
+            total: tasksData?.total || 0,
+            showSizeChanger: true,
+            showTotal: (total) => `共 ${total} 条`,
+            onChange: (page, size) => {
+              setCurrentPage(page);
+              setPageSize(size);
+            }
           }}
         />
       </Card>
@@ -156,10 +454,12 @@ function Tasks() {
         onCancel={() => {
           setIsModalOpen(false);
           form.resetFields();
+          setSelectedPlatform("");
+          setSelectedCrawlerType("");
         }}
         onOk={() => form.submit()}
         confirmLoading={createMutation.isPending}
-        width={600}
+        width={700}
       >
         <Form
           form={form}
@@ -178,7 +478,11 @@ function Tasks() {
             label="平台"
             rules={[{ required: true, message: "请选择平台" }]}
           >
-            <Select options={PLATFORM_OPTIONS} placeholder="请选择平台" />
+            <Select
+              options={PLATFORM_OPTIONS}
+              placeholder="请选择平台"
+              onChange={(value) => setSelectedPlatform(value)}
+            />
           </Form.Item>
 
           <Form.Item
@@ -189,16 +493,14 @@ function Tasks() {
             <Select
               options={CRAWLER_TYPE_OPTIONS}
               placeholder="请选择爬虫类型"
+              onChange={(value) => setSelectedCrawlerType(value)}
             />
           </Form.Item>
 
-          <Form.Item
-            name="keywords"
-            label="关键词"
-            tooltip="多个关键词用逗号分隔"
-          >
-            <Input placeholder="例如: 美食,旅游,摄影" />
-          </Form.Item>
+          {/* 平台特定配置 */}
+          {renderPlatformSpecificFields(selectedPlatform, selectedCrawlerType)}
+
+          <Divider />
 
           <Form.Item
             name="max_notes_count"

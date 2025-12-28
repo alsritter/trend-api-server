@@ -26,30 +26,54 @@ async def init_table_schema():
             await cursor.execute("SHOW TABLES")
             tables = await cursor.fetchall()
 
-            # 如果数据库中已有表，则跳过初始化
-            if len(tables) > 0:
-                print(f"[init_table_schema] Database already has {len(tables)} tables, skip initialization")
-                return
+            # 如果数据库中已有表，则只检查 crawler_tasks 表是否存在
+            table_names = [list(t.values())[0] for t in tables]
+            if "crawler_tasks" not in table_names:
+                print("[init_table_schema] Creating crawler_tasks table")
 
-            # 读取 MediaCrawlerPro-Python 的 SQL 文件
-            sql_file_path = os.path.join(
-                settings.CRAWLER_BASE_PATH,
-                "schema",
-                "tables.sql"
-            )
+                # 读取任务表的 SQL 文件
+                task_sql_file = os.path.join(
+                    os.path.dirname(os.path.dirname(__file__)),
+                    "app",
+                    "db",
+                    "task_schema.sql",
+                )
 
-            if not os.path.exists(sql_file_path):
-                print(f"[init_table_schema] SQL file not found: {sql_file_path}")
-                print("[init_table_schema] Skip table initialization")
-                return
+                if os.path.exists(task_sql_file):
+                    async with aiofiles.open(
+                        task_sql_file, mode="r", encoding="utf-8"
+                    ) as f:
+                        task_sql = await f.read()
+                        await cursor.execute(task_sql)
+                        print(
+                            "[init_table_schema] crawler_tasks table created successfully"
+                        )
+                else:
+                    print(
+                        f"[init_table_schema] Task SQL file not found: {task_sql_file}"
+                    )
 
-            # 读取并执行 SQL 文件
-            async with aiofiles.open(sql_file_path, mode="r", encoding="utf-8") as f:
-                schema_sql = await f.read()
+            # 如果数据库完全为空，则初始化 MediaCrawlerPro 的表结构
+            if len(tables) == 0:
+                # 读取 MediaCrawlerPro-Python 的 SQL 文件
+                sql_file_path = os.path.join(
+                    settings.CRAWLER_BASE_PATH, "schema", "tables.sql"
+                )
+
+                if not os.path.exists(sql_file_path):
+                    print(f"[init_table_schema] SQL file not found: {sql_file_path}")
+                    print("[init_table_schema] Skip table initialization")
+                    return
+
+                # 读取并执行 SQL 文件
+                async with aiofiles.open(
+                    sql_file_path, mode="r", encoding="utf-8"
+                ) as f:
+                    schema_sql = await f.read()
 
                 # 分割多个 SQL 语句并执行
                 # SQL 文件包含多个 CREATE TABLE 和 DROP TABLE 语句
-                sql_statements = schema_sql.split(';')
+                sql_statements = schema_sql.split(";")
 
                 for statement in sql_statements:
                     statement = statement.strip()
@@ -57,11 +81,15 @@ async def init_table_schema():
                         try:
                             await cursor.execute(statement)
                         except Exception as e:
-                            print(f"[init_table_schema] Error executing SQL: {str(e)[:100]}")
+                            print(
+                                f"[init_table_schema] Error executing SQL: {str(e)[:100]}"
+                            )
                             # 继续执行其他语句
                             continue
 
-                print("[init_table_schema] Database table schema initialized successfully")
+                print(
+                    "[init_table_schema] Database table schema initialized successfully"
+                )
 
 
 async def init_db():
@@ -76,9 +104,11 @@ async def init_db():
         autocommit=True,
         maxsize=10,
         minsize=1,
-        charset='utf8mb4'
+        charset="utf8mb4",
     )
-    print(f"Database connection pool initialized: {settings.RELATION_DB_HOST}:{settings.RELATION_DB_PORT}/{settings.RELATION_DB_NAME}")
+    print(
+        f"Database connection pool initialized: {settings.RELATION_DB_HOST}:{settings.RELATION_DB_PORT}/{settings.RELATION_DB_NAME}"
+    )
 
     # 初始化表结构
     await init_table_schema()
