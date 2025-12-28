@@ -3,15 +3,15 @@ version: '3.8'
 services:
   # MySQL 数据库
   db:
-    image: mysql:8.0
+    image: registry.cn-hangzhou.aliyuncs.com/zhengqing/mysql:8.0
     container_name: mysql_db
     environment:
       MYSQL_ROOT_PASSWORD: 123456
       MYSQL_DATABASE: media_crawler_pro
     ports:
-      - "3307:3306"
+      - "37217:3306"
     volumes:
-      - mysql_db_data:/var/lib/mysql
+      - ./data/mysql:/var/lib/mysql
     restart: unless-stopped
     networks:
       - mediacrawler-network
@@ -19,20 +19,21 @@ services:
 
   # Redis 缓存和队列
   redis:
-    image: redis:7.0
+    image: registry.cn-shenzhen.aliyuncs.com/qjwwy-pro/redis:6.0.9
     container_name: redis_cache
     ports:
-      - "6378:6379"
+      - "32398:6379"
     volumes:
-      - redis_data:/data
+      - ./data/redis:/data
     command: ["redis-server", "--requirepass", "123456"]
     restart: unless-stopped
     networks:
       - mediacrawler-network
 
-volumes:
-  mysql_db_data:
-  redis_data:
+# 不再需要 volumes 定义
+# volumes:
+#   mysql_db_data:
+#   redis_data:
 
 networks:
   mediacrawler-network:
