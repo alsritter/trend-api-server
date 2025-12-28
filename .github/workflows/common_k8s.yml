@@ -74,9 +74,10 @@ jobs:
       full-image: registry.cn-shenzhen.aliyuncs.com/qjwwy-pro/${{ inputs.container-name }}:${{ inputs.image-name }}-${{ github.run_number }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           submodules: recursive
+          token: ${{ github.token }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
@@ -135,9 +136,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           submodules: recursive
+          token: ${{ github.token }}
 
       - name: Set up kubectl
         uses: azure/setup-kubectl@v1
