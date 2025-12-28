@@ -76,12 +76,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
+          submodules: recursive
           token: ${{ github.token }}
-
-      - name: Checkout submodules
-        run: |
-          git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "git@github.com:"
-          git submodule update --init --recursive --depth=1
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
@@ -142,12 +138,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
+          submodules: recursive
           token: ${{ github.token }}
-
-      - name: Checkout submodules
-        run: |
-          git config --global url."https://x-access-token:${{ github.token }}@github.com/".insteadOf "git@github.com:"
-          git submodule update --init --recursive --depth=1
 
       - name: Set up kubectl
         uses: azure/setup-kubectl@v1
