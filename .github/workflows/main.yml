@@ -14,8 +14,8 @@ jobs:
       container-name: biz-radar
       namespace: lazygpt-pro
       replicas: "1"
-      container-port: "3000"
-      service-port: "3000"
+      container-port: "8000"
+      service-port: "8000"
       service-type: ""
       env-from-configmap: "biz-radar-config"
       env-from-secret: ""
