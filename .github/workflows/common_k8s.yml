@@ -66,7 +66,7 @@ on:
       WECHAT_WORK_BOT_WEBHOOK:
         required: true
       GH_PAT:
-        required: false
+        required: true
 
 jobs:
   build_and_push:
@@ -79,7 +79,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          token: ${{ secrets.GH_PAT || github.token }}
+          token: ${{ secrets.GH_PAT }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
