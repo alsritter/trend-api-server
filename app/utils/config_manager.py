@@ -145,21 +145,28 @@ class ProxyConfigManager:
                     # 解析 JSON 数据
                     ip_data = json.loads(value)
 
-                    # 解析 key 格式: {provider}_{ip}_{port}
-                    parts = key.split("_")
-                    if len(parts) >= 3:
-                        ip = parts[-2]
-                        port = parts[-1]
-                    else:
-                        # 如果 key 格式不符合预期，尝试从数据中获取
-                        ip = ip_data.get("ip", "")
-                        port = ip_data.get("port", 0)
+                    # 从数据中直接获取 IP 和端口（优先使用数据中的值）
+                    ip = ip_data.get("ip", "")
+                    port = ip_data.get("port", 0)
+
+                    # 如果数据中没有，则尝试从 key 中解析
+                    # key 格式: {provider}_{ip}_{port}
+                    if not ip or not port:
+                        parts = key.split("_")
+                        if len(parts) >= 3:
+                            ip = ip or parts[-2]
+                            port = port or int(parts[-1])
+
+                    # 从 protocol 字段中提取协议类型（去除 ://)
+                    protocol = ip_data.get("protocol", "https://")
+                    # 去除协议后缀 :// 只保留协议名称
+                    protocol = protocol.replace("://", "").lower()
 
                     # 构建 IP 信息
                     ip_info = {
                         "ip": ip,
                         "port": int(port) if isinstance(port, str) else port,
-                        "protocol": ip_data.get("protocol", "http"),
+                        "protocol": protocol,
                         "expired_time_ts": ip_data.get("expired_time_ts", 0),
                         "is_valid": ip_data.get("expired_time_ts", 0) > current_time
                     }
