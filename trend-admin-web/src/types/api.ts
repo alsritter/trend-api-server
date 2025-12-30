@@ -225,3 +225,61 @@ export interface Comment {
   ip_location?: string;
   pictures?: string;
 }
+
+// 向量相关类型
+export interface VectorAddRequest {
+  text: string;
+  collection_id: string;
+  metadata?: Record<string, any>;
+}
+
+export interface VectorAddResponse {
+  success: boolean;
+  vector_id: number;
+  message: string;
+}
+
+export interface VectorSearchRequest {
+  query_text: string;
+  collection_id?: string;
+  top_k?: number;
+  threshold?: number;
+}
+
+export interface VectorSearchResult {
+  id: number;
+  collection_id: string;
+  content?: string;
+  metadata?: Record<string, any>;
+  similarity: number;
+  createtime: string;
+}
+
+export interface VectorSearchResponse {
+  success: boolean;
+  results: VectorSearchResult[];
+  count: number;
+}
+
+export interface VectorDeleteResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface VectorInfo {
+  id: number;
+  content?: string;
+  metadata?: Record<string, any>;
+  createtime: string;
+}
+
+export interface CollectionInfo {
+  collection_id: string;
+  count: number;
+  vectors: VectorInfo[];
+}
+
+export interface ListCollectionsResponse {
+  success: boolean;
+  collections: CollectionInfo[];
+}

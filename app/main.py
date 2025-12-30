@@ -6,7 +6,8 @@ from contextlib import asynccontextmanager
 import os
 from app.config import settings
 from app.db.session import init_db, close_db
-from app.api.v1 import health
+from app.db.vector_session import init_vector_db, close_vector_db
+from app.api.v1 import health, tasks, accounts, contents, system, proxy, vectors
 
 
 @asynccontextmanager
@@ -14,14 +15,17 @@ async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时初始化数据库连接
     await init_db()
+    await init_vector_db()
     print("=" * 60)
     print("Trend API Server started successfully!")
     print(f"API Documentation: http://localhost:{settings.API_PORT}/docs")
     print(f"Frontend Path: http://localhost:{settings.API_PORT}/")
+    print(f"Vector Management: http://localhost:{settings.API_PORT}/vectors.html")
     print("=" * 60)
     yield
     # 关闭时清理资源
     await close_db()
+    await close_vector_db()
     print("Trend API Server shut down")
 
 
@@ -45,14 +49,13 @@ app.add_middleware(
 )
 
 # 注册路由
-from app.api.v1 import tasks, accounts, contents, system, proxy
-
 app.include_router(health.router, prefix="/api/v1", tags=["Health"])
 app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["Tasks"])
 app.include_router(accounts.router, prefix="/api/v1/accounts", tags=["Accounts"])
 app.include_router(contents.router, prefix="/api/v1/contents", tags=["Contents"])
 app.include_router(system.router, prefix="/api/v1/system", tags=["System"])
 app.include_router(proxy.router, prefix="/api/v1/proxy", tags=["Proxy"])
+app.include_router(vectors.router, prefix="/api/v1/vectors", tags=["Vectors"])
 
 
 # 静态文件目录配置

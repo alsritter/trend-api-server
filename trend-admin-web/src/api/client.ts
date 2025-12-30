@@ -26,15 +26,30 @@ apiClient.interceptors.request.use(
 // 响应拦截器
 apiClient.interceptors.response.use(
   (response) => {
-    const { code, message: msg, data } = response.data;
+    const responseData = response.data;
 
-    // API 返回的 code 不为 0 时，视为业务错误
-    if (code !== 0) {
-      message.error(msg || '请求失败');
-      return Promise.reject(new Error(msg || '请求失败'));
+    // 检查是否是新格式（向量 API 等）：{ success, ... }
+    if ('success' in responseData) {
+      if (!responseData.success) {
+        message.error(responseData.message || '请求失败');
+        return Promise.reject(new Error(responseData.message || '请求失败'));
+      }
+      return responseData;
     }
 
-    return data;
+    // 检查是否是旧格式：{ code, message, data }
+    const { code, message: msg, data } = responseData;
+    if (code !== undefined) {
+      // API 返回的 code 不为 0 时，视为业务错误
+      if (code !== 0) {
+        message.error(msg || '请求失败');
+        return Promise.reject(new Error(msg || '请求失败'));
+      }
+      return data;
+    }
+
+    // 直接返回原始数据（兼容其他可能的格式）
+    return responseData;
   },
   (error) => {
     // 网络错误或服务器错误

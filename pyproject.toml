@@ -16,8 +16,11 @@ dependencies = [
     # 数据库相关
     "aiomysql==0.2.0",
     "pymysql==1.1.0",
+    "asyncpg==0.29.0",
+    "pgvector==0.2.4",
     # HTTP 客户端
     "httpx==0.28.1",
+    "openai==1.12.0",
     # 工具库
     "python-multipart==0.0.6",
     "python-dotenv==1.0.0",

@@ -5,6 +5,7 @@ import Accounts from '@/pages/Accounts'
 import Proxy from '@/pages/Proxy'
 import Tasks from '@/pages/Tasks'
 import Contents from '@/pages/Contents'
+import Vectors from '@/pages/Vectors'
 
 function AppRoutes() {
   return (
@@ -17,6 +18,7 @@ function AppRoutes() {
         <Route path="tasks" element={<Tasks />} />
         <Route path="contents/:platform" element={<Contents />} />
         <Route path="contents" element={<Navigate to="/contents/xhs" replace />} />
+        <Route path="vectors" element={<Vectors />} />
       </Route>
     </Routes>
   )

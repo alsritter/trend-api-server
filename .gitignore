@@ -209,3 +209,5 @@ vite.config.ts.timestamp-*
 .vite/
 
 trend-admin-web/node_modules
+
+data

@@ -6,6 +6,7 @@ import {
   GlobalOutlined,
   ThunderboltOutlined,
   DatabaseOutlined,
+  DeploymentUnitOutlined,
 } from '@ant-design/icons'
 
 const { Sider } = Layout
@@ -39,6 +40,11 @@ function Sidebar() {
       key: '/contents',
       icon: <DatabaseOutlined />,
       label: '数据查看',
+    },
+    {
+      key: '/vectors',
+      icon: <DeploymentUnitOutlined />,
+      label: '向量管理',
     },
   ]
 

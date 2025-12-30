@@ -30,6 +30,22 @@ services:
     networks:
       - mediacrawler-network
 
+  # PgVector 向量数据库
+  pg:
+    image: registry.cn-shenzhen.aliyuncs.com/qjwwy-pro/pgvector:v0.5.0
+    container_name: pg
+    ports:
+      - "39432:5432"
+    networks:
+      - mediacrawler-network
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: FkaSjRGV7gynEMge
+      POSTGRES_DB: postgres
+    volumes:
+      - ./data/pg:/var/lib/postgresql/data
+    restart: unless-stopped
+
 # 不再需要 volumes 定义
 # volumes:
 #   mysql_db_data:

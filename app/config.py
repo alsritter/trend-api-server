@@ -24,6 +24,17 @@ class Settings(BaseSettings):
     REDIS_DB_PWD: str = "123456"
     REDIS_DB_NUM: int = 0
 
+    # PgVector 配置
+    PGVECTOR_HOST: str = "localhost"
+    PGVECTOR_PORT: int = 39432
+    PGVECTOR_USER: str = "root"
+    PGVECTOR_PASSWORD: str = "FkaSjRGV7gynEMge"
+    PGVECTOR_DB: str = "postgres"
+
+    # OpenAI 配置
+    OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+
     # Celery 配置
     @property
     def CELERY_BROKER_URL(self) -> str:

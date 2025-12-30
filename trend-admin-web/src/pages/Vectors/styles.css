@@ -1,0 +1,248 @@
+.vectors-container {
+  height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+  background-color: #f5f5f5;
+  padding: 16px;
+  border-radius: 8px;
+}
+
+/* 顶部搜索栏 */
+.vectors-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  background: white;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  gap: 16px;
+}
+
+/* 主体区域 */
+.vectors-content {
+  display: flex;
+  flex: 1;
+  gap: 16px;
+  overflow: hidden;
+}
+
+/* 左侧集合列表 */
+.collections-sidebar {
+  width: 280px;
+  background: white;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.collections-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.collections-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.collection-item {
+  padding: 12px 16px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.collection-item:hover {
+  background-color: #f5f7fa;
+}
+
+.collection-item.active {
+  background-color: #e6f4ff;
+  border-color: #91caff;
+}
+
+.collection-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.collection-icon {
+  font-size: 18px;
+  color: #faad14;
+  flex-shrink: 0;
+}
+
+.collection-text {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1;
+}
+
+.collection-name {
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.collection-count {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* 右侧向量列表 */
+.vectors-main {
+  flex: 1;
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  overflow-y: auto;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.vectors-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.vector-card {
+  height: 280px;
+  display: flex;
+  flex-direction: column;
+}
+
+.vector-card .ant-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.vector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.vector-icon {
+  font-size: 16px;
+  color: #1890ff;
+}
+
+.vector-id {
+  font-size: 12px;
+}
+
+.vector-content {
+  flex: 1;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.vector-metadata {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.vector-time {
+  font-size: 12px;
+  display: block;
+}
+
+/* 滚动条样式 */
+.collections-list::-webkit-scrollbar,
+.vectors-main::-webkit-scrollbar {
+  width: 6px;
+}
+
+.collections-list::-webkit-scrollbar-track,
+.vectors-main::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.collections-list::-webkit-scrollbar-thumb,
+.vectors-main::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 3px;
+}
+
+.collections-list::-webkit-scrollbar-thumb:hover,
+.vectors-main::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}
+
+/* 搜索结果样式 */
+.search-results-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.search-result-card {
+  border-radius: 8px;
+  border: 1px solid #f0f0f0;
+  transition: all 0.2s;
+}
+
+.search-result-card:hover {
+  border-color: #1890ff;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.1);
+}
+
+.search-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+  .vectors-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .vectors-content {
+    flex-direction: column;
+  }
+
+  .collections-sidebar {
+    width: 100%;
+    max-height: 200px;
+  }
+
+  .vectors-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vectors-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+}
