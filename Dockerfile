@@ -30,6 +30,7 @@ RUN apt-get update && apt-get install -y \
     libffi-dev \
     supervisor \
     curl \
+    tzdata \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -72,6 +73,7 @@ EXPOSE 8000 8989
 # 设置环境变量
 ENV PYTHONPATH="/app/MediaCrawlerPro-Python:/app/MediaCrawlerPro-SignSrv:/app/trend-api-server"
 ENV PYTHONUNBUFFERED=1
+ENV TZ=Asia/Shanghai
 
 # 使用 supervisor 启动多进程
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
