@@ -44,7 +44,6 @@ class ReasoningDetail(BaseModel):
 class KeywordAnalysis(BaseModel):
     """AI 返回的热词分析结构"""
 
-    id: str = Field(..., description="分析ID")
     title: str = Field(..., description="热词标题")
     confidence: float = Field(..., ge=0, le=1, description="置信度 0-1")
     primary_category: str = Field(..., alias="primaryCategory", description="主要分类")
