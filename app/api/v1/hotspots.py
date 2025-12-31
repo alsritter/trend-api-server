@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
+import logging
+import traceback
 from app.services.hotspot_service import hotspot_service
 from app.schemas.hotspot import (
     # 请求/响应模型
@@ -32,6 +34,9 @@ from app.schemas.hotspot import (
     RemoveHotspotFromClusterResponse,
 )
 
+# 配置日志
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
@@ -58,6 +63,10 @@ async def add_keyword_from_analysis(request: AddHotspotKeywordRequest):
             action=result["action"],
         )
     except Exception as e:
+        logger.error(
+            f"添加关键词时发生错误 - analysis: {request.analysis}, "
+            f"error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -82,6 +91,10 @@ async def check_hotspot_exists(request: CheckHotspotRequest):
             message=result["message"],
         )
     except Exception as e:
+        logger.error(
+            f"检查热词存在性时发生错误 - keyword: {request.keyword}, "
+            f"error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -108,6 +121,10 @@ async def add_business_report(request: AddBusinessReportRequest):
             message=result["message"],
         )
     except Exception as e:
+        logger.error(
+            f"添加商业报告时发生错误 - hotspot_id: {request.hotspot_id}, "
+            f"error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -132,8 +149,16 @@ async def add_to_push_queue(request: AddToPushQueueRequest):
             message=result["message"],
         )
     except ValueError as e:
+        logger.error(
+            f"添加到推送队列失败(未找到) - hotspot_id: {request.hotspot_id}, "
+            f"report_id: {request.report_id}, error: {str(e)}"
+        )
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        logger.error(
+            f"添加到推送队列时发生错误 - hotspot_id: {request.hotspot_id}, "
+            f"report_id: {request.report_id}, error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -151,6 +176,10 @@ async def get_pending_push_items(
         items = await hotspot_service.get_pending_push_items(limit)
         return GetPendingPushResponse(success=True, items=items, count=len(items))
     except Exception as e:
+        logger.error(
+            f"获取待推送项时发生错误 - limit: {limit}, "
+            f"error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -184,6 +213,10 @@ async def list_hotspots(
             items=result["items"],
         )
     except Exception as e:
+        logger.error(
+            f"列出热点时发生错误 - page: {page}, page_size: {page_size}, "
+            f"status: {status}, keyword: {keyword}, error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -200,6 +233,10 @@ async def get_cluster_hotspots(cluster_id: int):
             success=True, cluster_id=cluster_id, items=items, count=len(items)
         )
     except Exception as e:
+        logger.error(
+            f"获取聚簇热点时发生错误 - cluster_id: {cluster_id}, "
+            f"error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -216,8 +253,15 @@ async def delete_hotspot(hotspot_id: int):
             success=result["success"], message=result["message"]
         )
     except ValueError as e:
+        logger.error(
+            f"删除热点失败(未找到) - hotspot_id: {hotspot_id}, error: {str(e)}"
+        )
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        logger.error(
+            f"删除热点时发生错误 - hotspot_id: {hotspot_id}, "
+            f"error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -243,8 +287,16 @@ async def link_hotspot(request: LinkHotspotRequest):
             message=result["message"],
         )
     except ValueError as e:
+        logger.error(
+            f"关联热点失败(未找到) - keyword: {request.keyword}, "
+            f"source_hotspot_id: {request.hotspot_id}, error: {str(e)}"
+        )
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        logger.error(
+            f"关联热点时发生错误 - keyword: {request.keyword}, "
+            f"source_hotspot_id: {request.hotspot_id}, error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -262,6 +314,9 @@ async def list_clusters():
         items = await hotspot_service.list_clusters()
         return ListClustersResponse(success=True, items=items, count=len(items))
     except Exception as e:
+        logger.error(
+            f"列出聚簇时发生错误 - error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -280,6 +335,10 @@ async def get_hotspot(hotspot_id: int):
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(
+            f"获取热点详情时发生错误 - hotspot_id: {hotspot_id}, "
+            f"error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -304,8 +363,15 @@ async def merge_clusters(request: MergeClustersRequest):
             message=result["message"],
         )
     except ValueError as e:
+        logger.error(
+            f"合并聚簇失败(未找到) - source_cluster_ids: {request.source_cluster_ids}, error: {str(e)}"
+        )
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        logger.error(
+            f"合并聚簇时发生错误 - source_cluster_ids: {request.source_cluster_ids}, "
+            f"error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -331,8 +397,16 @@ async def split_cluster(cluster_id: int, request: SplitClusterRequest):
             message=result["message"],
         )
     except ValueError as e:
+        logger.error(
+            f"拆分聚簇失败(未找到) - cluster_id: {cluster_id}, "
+            f"hotspot_ids: {request.hotspot_ids}, error: {str(e)}"
+        )
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        logger.error(
+            f"拆分聚簇时发生错误 - cluster_id: {cluster_id}, "
+            f"hotspot_ids: {request.hotspot_ids}, error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -352,8 +426,15 @@ async def update_cluster(cluster_id: int, request: UpdateClusterRequest):
             success=result["success"], message=result["message"]
         )
     except ValueError as e:
+        logger.error(
+            f"更新聚簇失败(未找到) - cluster_id: {cluster_id}, error: {str(e)}"
+        )
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        logger.error(
+            f"更新聚簇时发生错误 - cluster_id: {cluster_id}, "
+            f"cluster_name: {request.cluster_name}, error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -372,8 +453,15 @@ async def delete_cluster(cluster_id: int):
             success=result["success"], message=result["message"]
         )
     except ValueError as e:
+        logger.error(
+            f"删除聚簇失败(未找到) - cluster_id: {cluster_id}, error: {str(e)}"
+        )
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        logger.error(
+            f"删除聚簇时发生错误 - cluster_id: {cluster_id}, "
+            f"error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -399,6 +487,14 @@ async def remove_hotspot_from_cluster(
             success=result["success"], message=result["message"]
         )
     except ValueError as e:
+        logger.error(
+            f"从聚簇移除热点失败(未找到) - cluster_id: {cluster_id}, "
+            f"hotspot_id: {request.hotspot_id}, error: {str(e)}"
+        )
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        logger.error(
+            f"从聚簇移除热点时发生错误 - cluster_id: {cluster_id}, "
+            f"hotspot_id: {request.hotspot_id}, error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
         raise HTTPException(status_code=500, detail=str(e))
