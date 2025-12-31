@@ -456,28 +456,6 @@ export interface CheckHotspotResponse {
   message: string;
 }
 
-// 关联热点请求
-export interface LinkHotspotsRequest {
-  source_hotspot_id: number;
-  target_hotspot_id: number;
-}
-
-export interface LinkHotspotsResponse {
-  success: boolean;
-  message: string;
-  cluster_id: number;
-}
-
-// 更新状态请求
-export interface UpdateHotspotStatusRequest {
-  status: HotspotStatus;
-}
-
-export interface UpdateHotspotStatusResponse {
-  success: boolean;
-  message: string;
-}
-
 // 添加商业报告请求
 export interface AddBusinessReportRequest {
   hotspot_id: number;
@@ -540,5 +518,18 @@ export interface GetClusterHotspotsResponse {
   cluster_id: number;
   items: HotspotDetail[];
   count: number;
+}
+
+// 关联热点请求
+export interface LinkHotspotRequest {
+  keyword: string;
+  hotspot_id: number;
+}
+
+export interface LinkHotspotResponse {
+  success: boolean;
+  hotspot_id: number;
+  cluster_id?: number;
+  message: string;
 }
 

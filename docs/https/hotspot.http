@@ -111,6 +111,34 @@ Content-Type: application/json
   "keyword": "狗考人纸巾挑战"
 }
 
+# {
+#   "exists": true,
+#   "action": "update",
+#   "hotspot_id": 10,
+#   "similar_hotspots": [
+#     {
+#       "id": 10,
+#       "keyword": "狗狗纸巾挑战",
+#       "normalized_keyword": "狗狗纸巾挑战",
+#       "status": "pending_validation",
+#       "first_seen_at": "2025-12-31T10:06:35.860427",
+#       "last_seen_at": "2025-12-31T10:06:35.860427",
+#       "appearance_count": 1,
+#       "similarity": 0.8556195497512817,
+#       "cluster_id": null
+#     }
+#   ],
+#   "message": "发现高相似度热词 (相似度 85.56%)，已更新"
+# }
+
+# {
+#   "exists": false,
+#   "action": "create",
+#   "hotspot_id": null,
+#   "similar_hotspots": [],
+#   "message": "热词 '完全不存在的热词12345' 不存在，可以创建"
+# }
+
 ### 场景 6: 添加一个低价值词（来自微博）
 POST {{baseUrl}}/api/v1/hotspots/add-keyword
 Content-Type: application/json
@@ -242,15 +270,6 @@ Content-Type: application/json
 ### 场景 15: 获取热点详情（需要替换 {hotspot_id} 为实际ID）
 GET {{baseUrl}}/api/v1/hotspots/1
 
-### 场景 16: 关联两个相似热词到同一个簇（需要替换 ID）
-POST {{baseUrl}}/api/v1/hotspots/link
-Content-Type: application/json
-
-{
-  "source_hotspot_id": 2,
-  "target_hotspot_id": 1
-}
-
 ### 场景 17: 更新热点状态 - 从 pending_validation 到 validated（需要替换 ID）
 PUT {{baseUrl}}/api/v1/hotspots/1/status
 Content-Type: application/json
@@ -261,6 +280,27 @@ Content-Type: application/json
 
 ### 场景 18: 删除热点（需要替换 {hotspot_id} 为实际ID）
 DELETE {{baseUrl}}/api/v1/hotspots/999
+
+
+### 场景 19: 关联热点 - 将新关键词关联到已有热点（复用分析信息和聚簇）
+POST {{baseUrl}}/api/v1/hotspots/link
+Content-Type: application/json
+
+{
+  "keyword": "宠物纸巾挑战",
+  "hotspot_id": 10
+}
+
+# 预期响应：
+# {
+#   "success": true,
+#   "hotspot_id": 15,
+#   "cluster_id": 2,
+#   "message": "成功创建关联热点 '宠物纸巾挑战' (ID: 15)，已关联到簇 2"
+# }
+
+### 场景 20: 获取簇内的所有热点（需要替换 cluster_id）
+GET {{baseUrl}}/api/v1/hotspots/cluster/2/hotspots
 
 
 # ==================== 旧的测试用例（保留作为参考）====================

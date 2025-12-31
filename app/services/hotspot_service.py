@@ -172,13 +172,13 @@ class HotspotService:
 
             # 平台名称映射
             platform_name_map = {
-                'xhs': '小红书',
-                'dy': '抖音',
-                'bili': '哔哩哔哩',
-                'ks': '快手',
-                'wb': '微博',
-                'tieba': '贴吧',
-                'zhihu': '知乎'
+                "xhs": "小红书",
+                "dy": "抖音",
+                "bili": "哔哩哔哩",
+                "ks": "快手",
+                "wb": "微博",
+                "tieba": "贴吧",
+                "zhihu": "知乎",
             }
 
             # 构建平台信息（从传入的平台数据中提取）
@@ -195,7 +195,9 @@ class HotspotService:
                         "platform": platform_name,
                         "rank": int(platform_data.get("rank", 0)),
                         "heat_score": heat_score,
-                        "seen_at": platform_data.get("date", datetime.now().isoformat()),
+                        "seen_at": platform_data.get(
+                            "date", datetime.now().isoformat()
+                        ),
                     }
                 ]
             else:
@@ -398,116 +400,6 @@ class HotspotService:
                     "similar_hotspots": similar_hotspots,
                     "message": f"发现 {len(similar_hotspots)} 个相似热词，建议交给LLM判断",
                 }
-
-    async def link_hotspots(
-        self, source_hotspot_id: int, target_hotspot_id: int
-    ) -> Dict[str, Any]:
-        """
-        标识词组有关联（将两个热词关联到同一个簇）
-
-        Args:
-            source_hotspot_id: 源热点ID
-            target_hotspot_id: 目标热点ID（要关联到的簇）
-
-        Returns:
-            包含 success, message, cluster_id 的字典
-        """
-        async with vector_session.pg_pool.acquire() as conn:
-            async with conn.transaction():
-                # 获取目标热点的簇ID
-                target_hotspot = await conn.fetchrow(
-                    "SELECT cluster_id, keyword FROM hotspots WHERE id = $1",
-                    target_hotspot_id,
-                )
-
-                if not target_hotspot:
-                    raise ValueError(f"目标热点 {target_hotspot_id} 不存在")
-
-                source_hotspot = await conn.fetchrow(
-                    "SELECT cluster_id, keyword FROM hotspots WHERE id = $1",
-                    source_hotspot_id,
-                )
-
-                if not source_hotspot:
-                    raise ValueError(f"源热点 {source_hotspot_id} 不存在")
-
-                cluster_id = target_hotspot["cluster_id"]
-
-                # 如果目标热点没有簇，创建新簇
-                if cluster_id is None:
-                    cluster_id = await conn.fetchval(
-                        """
-                        INSERT INTO hotspot_clusters (cluster_name, member_count, keywords)
-                        VALUES ($1, $2, $3)
-                        RETURNING id
-                        """,
-                        target_hotspot["keyword"],
-                        2,
-                        json.dumps(
-                            [target_hotspot["keyword"], source_hotspot["keyword"]]
-                        ),
-                    )
-
-                    # 更新目标热点的 cluster_id
-                    await conn.execute(
-                        "UPDATE hotspots SET cluster_id = $1 WHERE id = $2",
-                        cluster_id,
-                        target_hotspot_id,
-                    )
-                else:
-                    # 更新现有簇
-                    await conn.execute(
-                        """
-                        UPDATE hotspot_clusters
-                        SET member_count = member_count + 1,
-                            keywords = keywords || $1::jsonb
-                        WHERE id = $2
-                        """,
-                        json.dumps([source_hotspot["keyword"]]),
-                        cluster_id,
-                    )
-
-                # 更新源热点的 cluster_id
-                await conn.execute(
-                    "UPDATE hotspots SET cluster_id = $1 WHERE id = $2",
-                    cluster_id,
-                    source_hotspot_id,
-                )
-
-                return {
-                    "success": True,
-                    "message": f"热点 {source_hotspot_id} 已关联到簇 {cluster_id}",
-                    "cluster_id": cluster_id,
-                }
-
-    async def update_hotspot_status(
-        self, hotspot_id: int, status: HotspotStatus
-    ) -> Dict[str, Any]:
-        """
-        更新热点状态
-
-        Args:
-            hotspot_id: 热点ID
-            status: 新状态
-
-        Returns:
-            包含 success, message 的字典
-        """
-        async with vector_session.pg_pool.acquire() as conn:
-            result = await conn.execute(
-                "UPDATE hotspots SET status = $1 WHERE id = $2",
-                status.value,
-                hotspot_id,
-            )
-
-            deleted_count = int(result.split()[-1])
-            if deleted_count == 0:
-                raise ValueError(f"热点 {hotspot_id} 不存在")
-
-            return {
-                "success": True,
-                "message": f"热点 {hotspot_id} 状态已更新为 {status.value}",
-            }
 
     async def add_business_report(
         self,
@@ -894,6 +786,131 @@ class HotspotService:
                 )
                 for r in records
             ]
+
+    async def link_hotspot(
+        self, keyword: str, source_hotspot_id: int
+    ) -> Dict[str, Any]:
+        """
+        关联热点 - 复用已有热点的分析信息创建新热点
+
+        Args:
+            keyword: 新的关键词
+            source_hotspot_id: 要复用信息的热点ID
+
+        Returns:
+            包含 success, hotspot_id, cluster_id, message 的字典
+        """
+        async with vector_session.pg_pool.acquire() as conn:
+            async with conn.transaction():
+                # 获取源热点信息
+                source_hotspot = await conn.fetchrow(
+                    """
+                    SELECT keyword, normalized_keyword, cluster_id, platforms,
+                           status, is_filtered, filter_reason
+                    FROM hotspots
+                    WHERE id = $1
+                    """,
+                    source_hotspot_id,
+                )
+
+                if not source_hotspot:
+                    raise ValueError(f"源热点 {source_hotspot_id} 不存在")
+
+                # 检查新关键词是否已存在
+                existing = await conn.fetchrow(
+                    "SELECT id FROM hotspots WHERE keyword = $1", keyword
+                )
+
+                if existing:
+                    raise ValueError(
+                        f"关键词 '{keyword}' 已存在 (ID: {existing['id']})"
+                    )
+
+                # 生成新的向量
+                embedding = await vector_service.generate_embedding(keyword)
+
+                # 获取或创建 cluster
+                cluster_id = source_hotspot["cluster_id"]
+
+                if cluster_id:
+                    # 更新现有 cluster，添加新关键词
+                    await conn.execute(
+                        """
+                        UPDATE hotspot_clusters
+                        SET member_count = member_count + 1,
+                            keywords = keywords || $1::jsonb,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = $2
+                        """,
+                        json.dumps([keyword]),
+                        cluster_id,
+                    )
+                else:
+                    # 创建新 cluster，包含源热点和新热点
+                    cluster_id = await conn.fetchval(
+                        """
+                        INSERT INTO hotspot_clusters (cluster_name, member_count, keywords)
+                        VALUES ($1, 2, $2)
+                        RETURNING id
+                        """,
+                        source_hotspot["keyword"],  # 使用源热点作为 cluster 名称
+                        json.dumps([source_hotspot["keyword"], keyword]),
+                    )
+
+                    # 更新源热点的 cluster_id
+                    await conn.execute(
+                        """
+                        UPDATE hotspots
+                        SET cluster_id = $1,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = $2
+                        """,
+                        cluster_id,
+                        source_hotspot_id,
+                    )
+
+                # 复用源热点的平台信息（作为初始值）
+                platforms = (
+                    json.loads(source_hotspot["platforms"])
+                    if isinstance(source_hotspot["platforms"], str)
+                    else source_hotspot["platforms"]
+                )
+
+                # 创建新热点
+                now = datetime.now()
+                new_hotspot_id = await conn.fetchval(
+                    """
+                    INSERT INTO hotspots (
+                        keyword, normalized_keyword, embedding, embedding_model,
+                        cluster_id, first_seen_at, last_seen_at, appearance_count,
+                        platforms, status, is_filtered, filter_reason, filtered_at
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                    RETURNING id
+                    """,
+                    keyword,
+                    keyword.lower().strip(),
+                    embedding,
+                    vector_service.EMBEDDING_MODEL,
+                    cluster_id,
+                    now,
+                    now,
+                    1,
+                    json.dumps(platforms),
+                    source_hotspot["status"],
+                    source_hotspot["is_filtered"],
+                    source_hotspot["filter_reason"],
+                    source_hotspot["filtered_at"]
+                    if source_hotspot["is_filtered"]
+                    else None,
+                )
+
+                return {
+                    "success": True,
+                    "hotspot_id": new_hotspot_id,
+                    "cluster_id": cluster_id,
+                    "message": f"成功创建关联热点 '{keyword}' (ID: {new_hotspot_id})，已关联到簇 {cluster_id}",
+                }
 
 
 # 全局热点服务实例

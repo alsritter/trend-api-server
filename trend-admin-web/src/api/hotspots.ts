@@ -4,10 +4,6 @@ import type {
   AddHotspotKeywordResponse,
   CheckHotspotRequest,
   CheckHotspotResponse,
-  LinkHotspotsRequest,
-  LinkHotspotsResponse,
-  UpdateHotspotStatusRequest,
-  UpdateHotspotStatusResponse,
   AddBusinessReportRequest,
   AddBusinessReportResponse,
   AddToPushQueueRequest,
@@ -17,6 +13,8 @@ import type {
   ListHotspotsResponse,
   DeleteHotspotResponse,
   GetClusterHotspotsResponse,
+  LinkHotspotRequest,
+  LinkHotspotResponse,
   HotspotDetail,
 } from '@/types/api';
 
@@ -37,23 +35,6 @@ export const hotspotsApi = {
    */
   checkExists: async (data: CheckHotspotRequest): Promise<CheckHotspotResponse> => {
     return apiClient.post(`${BASE_PATH}/check-exists`, data);
-  },
-
-  /**
-   * 标识词组有关联
-   */
-  linkHotspots: async (data: LinkHotspotsRequest): Promise<LinkHotspotsResponse> => {
-    return apiClient.post(`${BASE_PATH}/link`, data);
-  },
-
-  /**
-   * 更新热点状态
-   */
-  updateStatus: async (
-    hotspotId: number,
-    data: UpdateHotspotStatusRequest
-  ): Promise<UpdateHotspotStatusResponse> => {
-    return apiClient.put(`${BASE_PATH}/${hotspotId}/status`, data);
   },
 
   /**
@@ -107,5 +88,12 @@ export const hotspotsApi = {
    */
   delete: async (hotspotId: number): Promise<DeleteHotspotResponse> => {
     return apiClient.delete(`${BASE_PATH}/${hotspotId}`);
+  },
+
+  /**
+   * 关联热点 - 复用已有热点的分析信息创建新热点
+   */
+  link: async (data: LinkHotspotRequest): Promise<LinkHotspotResponse> => {
+    return apiClient.post(`${BASE_PATH}/link`, data);
   },
 };

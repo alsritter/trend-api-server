@@ -7,10 +7,6 @@ from app.schemas.hotspot import (
     AddHotspotKeywordResponse,
     CheckHotspotRequest,
     CheckHotspotResponse,
-    LinkHotspotsRequest,
-    LinkHotspotsResponse,
-    UpdateHotspotStatusRequest,
-    UpdateHotspotStatusResponse,
     AddBusinessReportRequest,
     AddBusinessReportResponse,
     AddToPushQueueRequest,
@@ -19,6 +15,8 @@ from app.schemas.hotspot import (
     ListHotspotsResponse,
     DeleteHotspotResponse,
     GetClusterHotspotsResponse,
+    LinkHotspotRequest,
+    LinkHotspotResponse,
     HotspotStatus,
     HotspotDetail,
 )
@@ -72,51 +70,6 @@ async def check_hotspot_exists(request: CheckHotspotRequest):
             similar_hotspots=result["similar_hotspots"],
             message=result["message"],
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/link", response_model=LinkHotspotsResponse)
-async def link_hotspots(request: LinkHotspotsRequest):
-    """
-    标识词组有关联
-
-    将两个热词关联到同一个簇（cluster）
-    用于：当LLM判断两个热词相似时，调用此接口关联它们
-    """
-    try:
-        result = await hotspot_service.link_hotspots(
-            request.source_hotspot_id, request.target_hotspot_id
-        )
-        return LinkHotspotsResponse(
-            success=result["success"],
-            message=result["message"],
-            cluster_id=result["cluster_id"],
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.put("/{hotspot_id}/status", response_model=UpdateHotspotStatusResponse)
-async def update_hotspot_status(hotspot_id: int, request: UpdateHotspotStatusRequest):
-    """
-    更新热点状态
-
-    用于二阶段更新状态：
-    - pending_validation -> validated
-    - validated -> crawling -> crawled
-    - crawled -> analyzing -> analyzed
-    - analyzed -> archived
-    """
-    try:
-        result = await hotspot_service.update_hotspot_status(hotspot_id, request.status)
-        return UpdateHotspotStatusResponse(
-            success=result["success"], message=result["message"]
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -251,10 +204,7 @@ async def get_cluster_hotspots(cluster_id: int):
     try:
         items = await hotspot_service.get_cluster_hotspots(cluster_id)
         return GetClusterHotspotsResponse(
-            success=True,
-            cluster_id=cluster_id,
-            items=items,
-            count=len(items)
+            success=True, cluster_id=cluster_id, items=items, count=len(items)
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -271,6 +221,33 @@ async def delete_hotspot(hotspot_id: int):
         result = await hotspot_service.delete_hotspot(hotspot_id)
         return DeleteHotspotResponse(
             success=result["success"], message=result["message"]
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/link", response_model=LinkHotspotResponse)
+async def link_hotspot(request: LinkHotspotRequest):
+    """
+    关联热点 - 复用已有热点的分析信息创建新热点
+
+    功能：
+    - 复用指定热点的分析信息（状态、过滤信息、平台信息等）
+    - 为新关键词生成新的向量
+    - 创建新的热点记录
+    - 自动将新热点添加到同一个聚簇中（如果源热点没有簇则创建新簇）
+    """
+    try:
+        result = await hotspot_service.link_hotspot(
+            keyword=request.keyword, source_hotspot_id=request.hotspot_id
+        )
+        return LinkHotspotResponse(
+            success=result["success"],
+            hotspot_id=result["hotspot_id"],
+            cluster_id=result["cluster_id"],
+            message=result["message"],
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

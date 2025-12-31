@@ -123,35 +123,6 @@ class CheckHotspotResponse(BaseModel):
     )
     message: str
 
-
-class LinkHotspotsRequest(BaseModel):
-    """标识词组关联请求"""
-
-    source_hotspot_id: int = Field(..., description="源热点ID")
-    target_hotspot_id: int = Field(..., description="目标热点ID（要关联到的簇）")
-
-
-class LinkHotspotsResponse(BaseModel):
-    """标识词组关联响应"""
-
-    success: bool
-    message: str
-    cluster_id: int = Field(..., description="关联的簇ID")
-
-
-class UpdateHotspotStatusRequest(BaseModel):
-    """更新热点状态请求"""
-
-    status: HotspotStatus = Field(..., description="新状态")
-
-
-class UpdateHotspotStatusResponse(BaseModel):
-    """更新热点状态响应"""
-
-    success: bool
-    message: str
-
-
 # ==================== 商业报告相关 ====================
 class VirtualProductAnalysis(BaseModel):
     """虚拟产品分析"""
@@ -315,3 +286,19 @@ class GetClusterHotspotsResponse(BaseModel):
     cluster_id: int
     items: List[HotspotDetail]
     count: int
+
+
+class LinkHotspotRequest(BaseModel):
+    """关联热点请求 - 复用已有热点信息创建新热点"""
+
+    keyword: str = Field(..., description="新的关键词")
+    hotspot_id: int = Field(..., description="要复用信息的热点ID")
+
+
+class LinkHotspotResponse(BaseModel):
+    """关联热点响应"""
+
+    success: bool
+    hotspot_id: int = Field(..., description="新创建的热点ID")
+    cluster_id: Optional[int] = Field(None, description="关联的簇ID")
+    message: str
