@@ -533,3 +533,77 @@ export interface LinkHotspotResponse {
   message: string;
 }
 
+// ==================== 聚簇管理相关类型 ====================
+
+// 聚簇信息
+export interface ClusterInfo {
+  id: number;
+  cluster_name: string;
+  member_count: number;
+  keywords: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+// 列出聚簇响应
+export interface ListClustersResponse {
+  success: boolean;
+  items: ClusterInfo[];
+  count: number;
+}
+
+// 合并聚簇请求
+export interface MergeClustersRequest {
+  source_cluster_ids: number[];
+  target_cluster_name?: string;
+}
+
+// 合并聚簇响应
+export interface MergeClustersResponse {
+  success: boolean;
+  cluster_id: number;
+  message: string;
+}
+
+// 拆分聚簇请求
+export interface SplitClusterRequest {
+  cluster_id: number;
+  hotspot_ids: number[];
+  new_cluster_name?: string;
+}
+
+// 拆分聚簇响应
+export interface SplitClusterResponse {
+  success: boolean;
+  new_cluster_id?: number;
+  message: string;
+}
+
+// 更新聚簇请求
+export interface UpdateClusterRequest {
+  cluster_name: string;
+}
+
+// 更新聚簇响应
+export interface UpdateClusterResponse {
+  success: boolean;
+  message: string;
+}
+
+// 删除聚簇响应
+export interface DeleteClusterResponse {
+  success: boolean;
+  message: string;
+}
+
+// 从聚簇中移除热点请求
+export interface RemoveHotspotFromClusterRequest {
+  hotspot_id: number;
+}
+
+// 从聚簇中移除热点响应
+export interface RemoveHotspotFromClusterResponse {
+  success: boolean;
+  message: string;
+}
+

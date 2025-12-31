@@ -5,11 +5,15 @@ import {
   Space,
   Input,
   Select,
-  message
+  message,
+  Row,
+  Col
 } from "antd";
 import {
   SearchOutlined,
-  ReloadOutlined
+  ReloadOutlined,
+  TableOutlined,
+  ApartmentOutlined
 } from "@ant-design/icons";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -20,13 +24,18 @@ import type {
   ListHotspotsRequest
 } from "@/types/api";
 import "./styles.css";
-import { getHotspotTableColumns, STATUS_MAP } from "./components/HotspotTableColumns";
+import {
+  getHotspotTableColumns,
+  STATUS_MAP
+} from "./components/HotspotTableColumns";
 import { HotspotDetailModal } from "./components/HotspotDetailModal";
 import { ClusterHotspotsModal } from "./components/ClusterHotspotsModal";
+import { HotspotTreeView } from "./components/HotspotTreeView";
 
 const { Search } = Input;
 
 function Hotspots() {
+  const [viewMode, setViewMode] = useState<"tree" | "table">("tree");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [statusFilter, setStatusFilter] = useState<HotspotStatus | undefined>(
@@ -112,59 +121,123 @@ function Hotspots() {
 
   return (
     <div className="hotspots-container">
-      <Card>
-        {/* 顶部筛选栏 */}
-        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
-          <Space wrap>
-            <Search
-              placeholder="搜索热词..."
-              onSearch={handleSearch}
-              style={{ width: 300 }}
-              allowClear
-              enterButton={<SearchOutlined />}
-            />
-            <Select
-              placeholder="选择状态"
-              value={statusFilter}
-              onChange={setStatusFilter}
-              style={{ width: 150 }}
-              allowClear
-              options={[
-                { label: "全部状态", value: undefined },
-                ...Object.entries(STATUS_MAP).map(([value, { label }]) => ({
-                  label,
-                  value
-                }))
-              ]}
-            />
-            <Button icon={<ReloadOutlined />} onClick={() => refetch()}>
-              刷新
-            </Button>
-            <Button onClick={handleReset}>重置</Button>
-          </Space>
-        </Space>
+      <Row gutter={16}>
+        {/* 左侧：树形视图或状态筛选 */}
+        {viewMode === "tree" && (
+          <Col span={6}>
+            <Card title="热点聚簇" size="small">
+              <HotspotTreeView
+                status={statusFilter}
+                onHotspotSelect={handleViewDetail}
+                onRefresh={refetch}
+              />
+            </Card>
+          </Col>
+        )}
 
-        {/* 数据表格 */}
-        <Table
-          columns={columns}
-          dataSource={hotspotsData?.items || []}
-          rowKey="id"
-          loading={isLoading}
-          scroll={{ x: 1500 }}
-          pagination={{
-            current: page,
-            pageSize: pageSize,
-            total: hotspotsData?.total || 0,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total) => `共 ${total} 条`,
-            onChange: (newPage, newPageSize) => {
-              setPage(newPage);
-              setPageSize(newPageSize);
-            }
-          }}
-        />
-      </Card>
+        {/* 右侧：表格或详情 */}
+        <Col span={viewMode === "tree" ? 18 : 24}>
+          <Card>
+            {/* 顶部工具栏 */}
+            <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+              <Space wrap>
+                {/* 视图切换按钮 */}
+                <Button.Group>
+                  <Button
+                    icon={<ApartmentOutlined />}
+                    type={viewMode === "tree" ? "primary" : "default"}
+                    onClick={() => setViewMode("tree")}
+                  >
+                    树形视图
+                  </Button>
+                  <Button
+                    icon={<TableOutlined />}
+                    type={viewMode === "table" ? "primary" : "default"}
+                    onClick={() => setViewMode("table")}
+                  >
+                    表格视图
+                  </Button>
+                </Button.Group>
+
+                {/* 表格视图下的搜索和筛选 */}
+                {viewMode === "table" && (
+                  <>
+                    <Search
+                      placeholder="搜索热词..."
+                      onSearch={handleSearch}
+                      style={{ width: 300 }}
+                      allowClear
+                      enterButton={<SearchOutlined />}
+                    />
+                    <Select
+                      placeholder="选择状态"
+                      value={statusFilter}
+                      onChange={setStatusFilter}
+                      style={{ width: 150 }}
+                      allowClear
+                      options={[
+                        { label: "全部状态", value: undefined },
+                        ...Object.entries(STATUS_MAP).map(
+                          ([value, { label }]) => ({
+                            label,
+                            value
+                          })
+                        )
+                      ]}
+                    />
+                  </>
+                )}
+
+                <Button icon={<ReloadOutlined />} onClick={() => refetch()}>
+                  刷新
+                </Button>
+
+                {viewMode === "table" && (
+                  <Button onClick={handleReset}>重置</Button>
+                )}
+              </Space>
+            </Space>
+
+            {/* 数据表格 */}
+            {viewMode === "table" && (
+              <Table
+                columns={columns}
+                dataSource={hotspotsData?.items || []}
+                rowKey="id"
+                loading={isLoading}
+                scroll={{ x: 1500 }}
+                pagination={{
+                  current: page,
+                  pageSize: pageSize,
+                  total: hotspotsData?.total || 0,
+                  showSizeChanger: true,
+                  showQuickJumper: true,
+                  showTotal: (total) => `共 ${total} 条`,
+                  onChange: (newPage, newPageSize) => {
+                    setPage(newPage);
+                    setPageSize(newPageSize);
+                  }
+                }}
+              />
+            )}
+
+            {/* 树形视图下显示选中热点的详情 */}
+            {viewMode === "tree" && selectedHotspot && (
+              <div style={{ marginTop: 16 }}>
+                <h3>热点详情</h3>
+                <p>关键词: {selectedHotspot.keyword}</p>
+                <p>状态: {STATUS_MAP[selectedHotspot.status]?.label}</p>
+                <p>出现次数: {selectedHotspot.appearance_count}</p>
+                <p>首次出现: {selectedHotspot.first_seen_at}</p>
+                <p>最后出现: {selectedHotspot.last_seen_at}</p>
+                <Button onClick={() => setDetailModalVisible(true)}>
+                  查看完整详情
+                </Button>
+              </div>
+            )}
+          </Card>
+        </Col>
+      </Row>
 
       {/* 详情弹窗 */}
       <HotspotDetailModal

@@ -12,6 +12,7 @@ from app.schemas.hotspot import (
     PlatformInfo,
     BusinessReportContent,
     PushQueueItem,
+    ClusterInfo,
 )
 import json
 
@@ -822,9 +823,12 @@ class HotspotService:
                 )
 
                 if existing:
-                    raise ValueError(
-                        f"关键词 '{keyword}' 已存在 (ID: {existing['id']})"
-                    )
+                    return {
+                        "success": False,
+                        "hotspot_id": existing["id"],
+                        "cluster_id": source_hotspot["cluster_id"],
+                        "message": f"关键词 '{keyword}' 已存在，无法关联",
+                    }
 
                 # 生成新的向量
                 embedding = await vector_service.generate_embedding(keyword)
@@ -910,6 +914,401 @@ class HotspotService:
                     "hotspot_id": new_hotspot_id,
                     "cluster_id": cluster_id,
                     "message": f"成功创建关联热点 '{keyword}' (ID: {new_hotspot_id})，已关联到簇 {cluster_id}",
+                }
+
+    # ==================== 聚簇管理方法 ====================
+
+    async def list_clusters(self) -> List[ClusterInfo]:
+        """
+        列出所有聚簇
+
+        Returns:
+            聚簇列表
+        """
+        async with vector_session.pg_pool.acquire() as conn:
+            records = await conn.fetch(
+                """
+                SELECT id, cluster_name, member_count, keywords, created_at, updated_at
+                FROM hotspot_clusters
+                ORDER BY updated_at DESC
+                """
+            )
+
+            return [
+                ClusterInfo(
+                    id=r["id"],
+                    cluster_name=r["cluster_name"],
+                    member_count=r["member_count"],
+                    keywords=json.loads(r["keywords"])
+                    if isinstance(r["keywords"], str)
+                    else r["keywords"],
+                    created_at=r["created_at"],
+                    updated_at=r["updated_at"],
+                )
+                for r in records
+            ]
+
+    async def merge_clusters(
+        self, source_cluster_ids: List[int], target_cluster_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        合并多个聚簇
+
+        Args:
+            source_cluster_ids: 要合并的源簇ID列表
+            target_cluster_name: 目标簇名称（可选）
+
+        Returns:
+            包含 success, cluster_id, message 的字典
+        """
+        async with vector_session.pg_pool.acquire() as conn:
+            async with conn.transaction():
+                # 获取所有源簇信息
+                clusters = await conn.fetch(
+                    """
+                    SELECT id, cluster_name, member_count, keywords
+                    FROM hotspot_clusters
+                    WHERE id = ANY($1)
+                    """,
+                    source_cluster_ids,
+                )
+
+                if len(clusters) < 2:
+                    raise ValueError("至少需要2个聚簇才能合并")
+
+                # 收集所有关键词和计算总成员数
+                all_keywords = []
+                total_members = 0
+                for cluster in clusters:
+                    keywords = (
+                        json.loads(cluster["keywords"])
+                        if isinstance(cluster["keywords"], str)
+                        else cluster["keywords"]
+                    )
+                    all_keywords.extend(keywords)
+                    total_members += cluster["member_count"]
+
+                # 去重关键词
+                unique_keywords = list(dict.fromkeys(all_keywords))
+
+                # 使用第一个簇作为目标簇，或使用指定的名称
+                target_cluster_id = source_cluster_ids[0]
+                final_cluster_name = target_cluster_name or clusters[0]["cluster_name"]
+
+                # 更新目标簇
+                await conn.execute(
+                    """
+                    UPDATE hotspot_clusters
+                    SET cluster_name = $1,
+                        member_count = $2,
+                        keywords = $3,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = $4
+                    """,
+                    final_cluster_name,
+                    total_members,
+                    json.dumps(unique_keywords),
+                    target_cluster_id,
+                )
+
+                # 更新所有热点的cluster_id到目标簇
+                await conn.execute(
+                    """
+                    UPDATE hotspots
+                    SET cluster_id = $1,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE cluster_id = ANY($2)
+                    """,
+                    target_cluster_id,
+                    source_cluster_ids,
+                )
+
+                # 删除其他源簇
+                other_cluster_ids = [
+                    cid for cid in source_cluster_ids if cid != target_cluster_id
+                ]
+                if other_cluster_ids:
+                    await conn.execute(
+                        "DELETE FROM hotspot_clusters WHERE id = ANY($1)",
+                        other_cluster_ids,
+                    )
+
+                return {
+                    "success": True,
+                    "cluster_id": target_cluster_id,
+                    "message": f"成功合并 {len(source_cluster_ids)} 个聚簇到簇 {target_cluster_id}",
+                }
+
+    async def split_cluster(
+        self,
+        cluster_id: int,
+        hotspot_ids: List[int],
+        new_cluster_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        拆分聚簇 - 从指定聚簇中移出部分热点
+
+        Args:
+            cluster_id: 要拆分的簇ID
+            hotspot_ids: 要移出的热点ID列表
+            new_cluster_name: 新簇名称（可选）
+
+        Returns:
+            包含 success, new_cluster_id, message 的字典
+        """
+        async with vector_session.pg_pool.acquire() as conn:
+            async with conn.transaction():
+                # 检查簇是否存在
+                cluster = await conn.fetchrow(
+                    "SELECT id, cluster_name, member_count, keywords FROM hotspot_clusters WHERE id = $1",
+                    cluster_id,
+                )
+
+                if not cluster:
+                    raise ValueError(f"聚簇 {cluster_id} 不存在")
+
+                # 获取要移出的热点
+                hotspots = await conn.fetch(
+                    """
+                    SELECT id, keyword, cluster_id
+                    FROM hotspots
+                    WHERE id = ANY($1) AND cluster_id = $2
+                    """,
+                    hotspot_ids,
+                    cluster_id,
+                )
+
+                if not hotspots:
+                    raise ValueError("没有找到要移出的热点或热点不属于该聚簇")
+
+                # 获取移出的关键词
+                removed_keywords = [h["keyword"] for h in hotspots]
+
+                # 如果移出的热点数量大于1，创建新簇
+                new_cluster_id = None
+                if len(hotspots) > 1:
+                    # 确定新簇名称
+                    final_new_cluster_name = new_cluster_name or removed_keywords[0]
+
+                    # 创建新簇
+                    new_cluster_id = await conn.fetchval(
+                        """
+                        INSERT INTO hotspot_clusters (cluster_name, member_count, keywords)
+                        VALUES ($1, $2, $3)
+                        RETURNING id
+                        """,
+                        final_new_cluster_name,
+                        len(hotspots),
+                        json.dumps(removed_keywords),
+                    )
+
+                    # 更新移出的热点到新簇
+                    await conn.execute(
+                        """
+                        UPDATE hotspots
+                        SET cluster_id = $1,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = ANY($2)
+                        """,
+                        new_cluster_id,
+                        hotspot_ids,
+                    )
+                else:
+                    # 只有一个热点，直接清除其cluster_id
+                    await conn.execute(
+                        """
+                        UPDATE hotspots
+                        SET cluster_id = NULL,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = $1
+                        """,
+                        hotspot_ids[0],
+                    )
+
+                # 更新原簇的成员数量和关键词列表
+                old_keywords = (
+                    json.loads(cluster["keywords"])
+                    if isinstance(cluster["keywords"], str)
+                    else cluster["keywords"]
+                )
+                remaining_keywords = [
+                    kw for kw in old_keywords if kw not in removed_keywords
+                ]
+                remaining_count = cluster["member_count"] - len(hotspots)
+
+                if remaining_count > 0:
+                    # 更新原簇
+                    await conn.execute(
+                        """
+                        UPDATE hotspot_clusters
+                        SET member_count = $1,
+                            keywords = $2,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = $3
+                        """,
+                        remaining_count,
+                        json.dumps(remaining_keywords),
+                        cluster_id,
+                    )
+                else:
+                    # 如果原簇没有成员了，删除该簇
+                    await conn.execute(
+                        "DELETE FROM hotspot_clusters WHERE id = $1", cluster_id
+                    )
+
+                message = f"成功从簇 {cluster_id} 中移出 {len(hotspots)} 个热点"
+                if new_cluster_id:
+                    message += f"，并创建新簇 {new_cluster_id}"
+
+                return {
+                    "success": True,
+                    "new_cluster_id": new_cluster_id,
+                    "message": message,
+                }
+
+    async def update_cluster(
+        self, cluster_id: int, cluster_name: str
+    ) -> Dict[str, Any]:
+        """
+        更新聚簇信息
+
+        Args:
+            cluster_id: 簇ID
+            cluster_name: 新的簇名称
+
+        Returns:
+            包含 success, message 的字典
+        """
+        async with vector_session.pg_pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                UPDATE hotspot_clusters
+                SET cluster_name = $1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $2
+                """,
+                cluster_name,
+                cluster_id,
+            )
+
+            updated_count = int(result.split()[-1])
+            if updated_count == 0:
+                raise ValueError(f"聚簇 {cluster_id} 不存在")
+
+            return {"success": True, "message": f"聚簇 {cluster_id} 已更新"}
+
+    async def delete_cluster(self, cluster_id: int) -> Dict[str, Any]:
+        """
+        删除聚簇
+
+        Args:
+            cluster_id: 簇ID
+
+        Returns:
+            包含 success, message 的字典
+        """
+        async with vector_session.pg_pool.acquire() as conn:
+            async with conn.transaction():
+                # 将所有相关热点的cluster_id设为NULL
+                await conn.execute(
+                    """
+                    UPDATE hotspots
+                    SET cluster_id = NULL,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE cluster_id = $1
+                    """,
+                    cluster_id,
+                )
+
+                # 删除聚簇
+                result = await conn.execute(
+                    "DELETE FROM hotspot_clusters WHERE id = $1", cluster_id
+                )
+
+                deleted_count = int(result.split()[-1])
+                if deleted_count == 0:
+                    raise ValueError(f"聚簇 {cluster_id} 不存在")
+
+                return {"success": True, "message": f"聚簇 {cluster_id} 已删除"}
+
+    async def remove_hotspot_from_cluster(
+        self, cluster_id: int, hotspot_id: int
+    ) -> Dict[str, Any]:
+        """
+        从聚簇中移除单个热点
+
+        Args:
+            cluster_id: 簇ID
+            hotspot_id: 热点ID
+
+        Returns:
+            包含 success, message 的字典
+        """
+        async with vector_session.pg_pool.acquire() as conn:
+            async with conn.transaction():
+                # 获取热点信息
+                hotspot = await conn.fetchrow(
+                    "SELECT id, keyword, cluster_id FROM hotspots WHERE id = $1",
+                    hotspot_id,
+                )
+
+                if not hotspot:
+                    raise ValueError(f"热点 {hotspot_id} 不存在")
+
+                if hotspot["cluster_id"] != cluster_id:
+                    raise ValueError(f"热点 {hotspot_id} 不属于聚簇 {cluster_id}")
+
+                # 将热点的cluster_id设为NULL
+                await conn.execute(
+                    """
+                    UPDATE hotspots
+                    SET cluster_id = NULL,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = $1
+                    """,
+                    hotspot_id,
+                )
+
+                # 获取簇信息
+                cluster = await conn.fetchrow(
+                    "SELECT id, member_count, keywords FROM hotspot_clusters WHERE id = $1",
+                    cluster_id,
+                )
+
+                if cluster:
+                    # 更新簇的成员数量和关键词列表
+                    old_keywords = (
+                        json.loads(cluster["keywords"])
+                        if isinstance(cluster["keywords"], str)
+                        else cluster["keywords"]
+                    )
+                    new_keywords = [
+                        kw for kw in old_keywords if kw != hotspot["keyword"]
+                    ]
+                    new_member_count = cluster["member_count"] - 1
+
+                    if new_member_count > 0:
+                        await conn.execute(
+                            """
+                            UPDATE hotspot_clusters
+                            SET member_count = $1,
+                                keywords = $2,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = $3
+                            """,
+                            new_member_count,
+                            json.dumps(new_keywords),
+                            cluster_id,
+                        )
+                    else:
+                        # 如果簇没有成员了，删除该簇
+                        await conn.execute(
+                            "DELETE FROM hotspot_clusters WHERE id = $1", cluster_id
+                        )
+
+                return {
+                    "success": True,
+                    "message": f"成功从簇 {cluster_id} 中移除热点 {hotspot_id}",
                 }
 
 

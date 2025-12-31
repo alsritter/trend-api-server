@@ -302,3 +302,89 @@ class LinkHotspotResponse(BaseModel):
     hotspot_id: int = Field(..., description="新创建的热点ID")
     cluster_id: Optional[int] = Field(None, description="关联的簇ID")
     message: str
+
+
+# ==================== 聚簇管理相关 ====================
+class ClusterInfo(BaseModel):
+    """聚簇信息"""
+
+    id: int
+    cluster_name: str
+    member_count: int
+    keywords: List[str]
+    created_at: datetime
+    updated_at: datetime
+
+
+class ListClustersResponse(BaseModel):
+    """列出聚簇响应"""
+
+    success: bool
+    items: List[ClusterInfo]
+    count: int
+
+
+class MergeClustersRequest(BaseModel):
+    """合并聚簇请求"""
+
+    source_cluster_ids: List[int] = Field(
+        ..., min_length=2, description="要合并的源簇ID列表（至少2个）"
+    )
+    target_cluster_name: Optional[str] = Field(None, description="目标簇名称（可选，默认使用第一个簇的名称）")
+
+
+class MergeClustersResponse(BaseModel):
+    """合并聚簇响应"""
+
+    success: bool
+    cluster_id: int = Field(..., description="合并后的簇ID")
+    message: str
+
+
+class SplitClusterRequest(BaseModel):
+    """拆分聚簇请求"""
+
+    cluster_id: int = Field(..., description="要拆分的簇ID")
+    hotspot_ids: List[int] = Field(..., min_length=1, description="要移出的热点ID列表")
+    new_cluster_name: Optional[str] = Field(None, description="新簇名称（可选，默认使用第一个热点的名称）")
+
+
+class SplitClusterResponse(BaseModel):
+    """拆分聚簇响应"""
+
+    success: bool
+    new_cluster_id: Optional[int] = Field(None, description="新创建的簇ID（如果创建了新簇）")
+    message: str
+
+
+class UpdateClusterRequest(BaseModel):
+    """更新聚簇请求"""
+
+    cluster_name: str = Field(..., description="簇名称")
+
+
+class UpdateClusterResponse(BaseModel):
+    """更新聚簇响应"""
+
+    success: bool
+    message: str
+
+
+class DeleteClusterResponse(BaseModel):
+    """删除聚簇响应"""
+
+    success: bool
+    message: str
+
+
+class RemoveHotspotFromClusterRequest(BaseModel):
+    """从聚簇中移除热点请求"""
+
+    hotspot_id: int = Field(..., description="热点ID")
+
+
+class RemoveHotspotFromClusterResponse(BaseModel):
+    """从聚簇中移除热点响应"""
+
+    success: bool
+    message: str

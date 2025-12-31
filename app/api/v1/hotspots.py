@@ -19,6 +19,17 @@ from app.schemas.hotspot import (
     LinkHotspotResponse,
     HotspotStatus,
     HotspotDetail,
+    # 聚簇管理
+    ListClustersResponse,
+    MergeClustersRequest,
+    MergeClustersResponse,
+    SplitClusterRequest,
+    SplitClusterResponse,
+    UpdateClusterRequest,
+    UpdateClusterResponse,
+    DeleteClusterResponse,
+    RemoveHotspotFromClusterRequest,
+    RemoveHotspotFromClusterResponse,
 )
 
 router = APIRouter()
@@ -149,7 +160,7 @@ async def get_pending_push_items(
 @router.get("/list", response_model=ListHotspotsResponse)
 async def list_hotspots(
     page: int = Query(default=1, ge=1, description="页码"),
-    page_size: int = Query(default=20, ge=1, le=100, description="每页数量"),
+    page_size: int = Query(default=20, ge=1, le=1000, description="每页数量"),
     status: Optional[HotspotStatus] = Query(None, description="状态过滤"),
     keyword: Optional[str] = Query(None, description="关键词搜索"),
 ):
@@ -172,24 +183,6 @@ async def list_hotspots(
             page_size=result["page_size"],
             items=result["items"],
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/{hotspot_id}", response_model=HotspotDetail)
-async def get_hotspot(hotspot_id: int):
-    """
-    获取热点详情
-
-    返回热点的完整信息
-    """
-    try:
-        hotspot = await hotspot_service.get_hotspot_by_id(hotspot_id)
-        if not hotspot:
-            raise HTTPException(status_code=404, detail=f"热点 {hotspot_id} 不存在")
-        return hotspot
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -248,6 +241,162 @@ async def link_hotspot(request: LinkHotspotRequest):
             hotspot_id=result["hotspot_id"],
             cluster_id=result["cluster_id"],
             message=result["message"],
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 聚簇管理接口 ====================
+
+
+@router.get("/clusters", response_model=ListClustersResponse)
+async def list_clusters():
+    """
+    列出所有聚簇
+
+    返回所有聚簇的基本信息
+    """
+    try:
+        items = await hotspot_service.list_clusters()
+        return ListClustersResponse(success=True, items=items, count=len(items))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{hotspot_id}", response_model=HotspotDetail)
+async def get_hotspot(hotspot_id: int):
+    """
+    获取热点详情
+
+    返回热点的完整信息
+    """
+    try:
+        hotspot = await hotspot_service.get_hotspot_by_id(hotspot_id)
+        if not hotspot:
+            raise HTTPException(status_code=404, detail=f"热点 {hotspot_id} 不存在")
+        return hotspot
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/clusters/merge", response_model=MergeClustersResponse)
+async def merge_clusters(request: MergeClustersRequest):
+    """
+    合并多个聚簇
+
+    功能：
+    - 将多个聚簇合并为一个
+    - 更新所有热点的cluster_id
+    - 删除被合并的聚簇
+    """
+    try:
+        result = await hotspot_service.merge_clusters(
+            source_cluster_ids=request.source_cluster_ids,
+            target_cluster_name=request.target_cluster_name,
+        )
+        return MergeClustersResponse(
+            success=result["success"],
+            cluster_id=result["cluster_id"],
+            message=result["message"],
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/clusters/{cluster_id}/split", response_model=SplitClusterResponse)
+async def split_cluster(cluster_id: int, request: SplitClusterRequest):
+    """
+    拆分聚簇
+
+    功能：
+    - 从指定聚簇中移出部分热点
+    - 为移出的热点创建新聚簇（如果有多个）或清除cluster_id（如果只有一个）
+    - 更新原聚簇的成员数量
+    """
+    try:
+        result = await hotspot_service.split_cluster(
+            cluster_id=cluster_id,
+            hotspot_ids=request.hotspot_ids,
+            new_cluster_name=request.new_cluster_name,
+        )
+        return SplitClusterResponse(
+            success=result["success"],
+            new_cluster_id=result.get("new_cluster_id"),
+            message=result["message"],
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/clusters/{cluster_id}", response_model=UpdateClusterResponse)
+async def update_cluster(cluster_id: int, request: UpdateClusterRequest):
+    """
+    更新聚簇信息
+
+    功能：
+    - 更新聚簇名称
+    """
+    try:
+        result = await hotspot_service.update_cluster(
+            cluster_id=cluster_id, cluster_name=request.cluster_name
+        )
+        return UpdateClusterResponse(
+            success=result["success"], message=result["message"]
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/clusters/{cluster_id}", response_model=DeleteClusterResponse)
+async def delete_cluster(cluster_id: int):
+    """
+    删除聚簇
+
+    功能：
+    - 删除指定聚簇
+    - 将所有相关热点的cluster_id设为NULL
+    """
+    try:
+        result = await hotspot_service.delete_cluster(cluster_id)
+        return DeleteClusterResponse(
+            success=result["success"], message=result["message"]
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/clusters/{cluster_id}/remove-hotspot",
+    response_model=RemoveHotspotFromClusterResponse,
+)
+async def remove_hotspot_from_cluster(
+    cluster_id: int, request: RemoveHotspotFromClusterRequest
+):
+    """
+    从聚簇中移除单个热点
+
+    功能：
+    - 将热点的cluster_id设为NULL
+    - 更新聚簇的成员数量和关键词列表
+    """
+    try:
+        result = await hotspot_service.remove_hotspot_from_cluster(
+            cluster_id=cluster_id, hotspot_id=request.hotspot_id
+        )
+        return RemoveHotspotFromClusterResponse(
+            success=result["success"], message=result["message"]
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
