@@ -1,6 +1,7 @@
 
 
-@baseUrl = https://bizradarapi.xingsuancn.com
+# @baseUrl = https://bizradarapi.xingsuancn.com
+@baseUrl = http://127.0.0.1:8000
 
 
 ### 获取商机列表
@@ -22,6 +23,4 @@ GET https://api.itapi.cn/api/hotnews/douyin?key=tX1YqbmsYJEtZJe7NSzCmhVuvZ
 
 ### B站热搜
 GET https://api.itapi.cn/api/hotnews/bilibili?key=tX1YqbmsYJEtZJe7NSzCmhVuvZ
-
-
 

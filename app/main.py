@@ -7,7 +7,7 @@ import os
 from app.config import settings
 from app.db.session import init_db, close_db
 from app.db.vector_session import init_vector_db, close_vector_db
-from app.api.v1 import health, tasks, accounts, contents, system, proxy, vectors
+from app.api.v1 import health, tasks, accounts, contents, system, proxy, vectors, hotspots
 
 
 @asynccontextmanager
@@ -56,6 +56,7 @@ app.include_router(contents.router, prefix="/api/v1/contents", tags=["Contents"]
 app.include_router(system.router, prefix="/api/v1/system", tags=["System"])
 app.include_router(proxy.router, prefix="/api/v1/proxy", tags=["Proxy"])
 app.include_router(vectors.router, prefix="/api/v1/vectors", tags=["Vectors"])
+app.include_router(hotspots.router, prefix="/api/v1/hotspots", tags=["Hotspots"])
 
 
 # 静态文件目录配置

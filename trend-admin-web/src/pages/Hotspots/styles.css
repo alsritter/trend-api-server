@@ -1,0 +1,22 @@
+.hotspots-container {
+  padding: 5px;
+  background: #f0f2f5;
+  min-height: 100vh;
+}
+
+.hotspots-container .ant-card {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.hotspots-container .ant-table-wrapper {
+  margin-top: 16px;
+}
+
+.hotspots-container .ant-table-cell {
+  font-size: 13px;
+}
+
+.hotspots-container .ant-badge-count {
+  box-shadow: none;
+}

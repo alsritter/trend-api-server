@@ -7,6 +7,7 @@ import {
   ThunderboltOutlined,
   DatabaseOutlined,
   DeploymentUnitOutlined,
+  FireOutlined,
 } from '@ant-design/icons'
 
 const { Sider } = Layout
@@ -20,6 +21,11 @@ function Sidebar() {
       key: '/dashboard',
       icon: <DashboardOutlined />,
       label: '仪表盘',
+    },
+    {
+      key: '/hotspots',
+      icon: <FireOutlined />,
+      label: '热点管理',
     },
     {
       key: '/accounts',

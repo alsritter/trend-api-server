@@ -1,0 +1,362 @@
+
+
+# @baseUrl = https://bizradarapi.xingsuancn.com
+@baseUrl = http://127.0.0.1:8000
+
+
+
+# ==================== Hotspot API Tests ====================
+
+### 场景 1: 添加一个来自小红书的待研究热词（带完整平台信息）
+POST {{baseUrl}}/api/v1/hotspots/add-keyword
+Content-Type: application/json
+
+{
+  "analysis": {
+    "id": "ID8",
+    "title": "萝卜纸巾挑战开始小狗考人了",
+    "confidence": 0.9,
+    "primaryCategory": "待研究",
+    "tags": ["热门梗"],
+    "reasoning": {
+      "keep": ["属于热门梗，可能衍生周边、表情包、定制商品，有隐性商机"],
+      "risk": []
+    },
+    "opportunities": ["开发相关周边产品", "制作表情包进行售卖"],
+    "isRemove": false
+  },
+  "platform_data": {
+    "date": "2025-12-29",
+    "icon": "",
+    "name": "萝卜纸巾挑战开始狗考人了",
+    "rank": "10",
+    "type": "xhs",
+    "url": "https://www.xiaohongshu.com/search_result?keyword=萝卜纸巾挑战开始狗考人了&source=web_search_result_notes",
+    "viewnum": "541.2万",
+    "word_cover": {
+      "uri": "",
+      "url_list": []
+    },
+    "word_type": "无"
+  }
+}
+
+### 场景 2: 添加第一个相似词 - "狗狗纸巾挑战"（相似热词测试）
+POST {{baseUrl}}/api/v1/hotspots/add-keyword
+Content-Type: application/json
+
+{
+  "analysis": {
+    "id": "ID9",
+    "title": "狗狗纸巾挑战",
+    "confidence": 0.85,
+    "primaryCategory": "待研究",
+    "tags": ["宠物", "挑战"],
+    "reasoning": {
+      "keep": ["与宠物相关，可能有周边商机"],
+      "risk": []
+    },
+    "opportunities": ["宠物玩具开发"],
+    "isRemove": false
+  },
+  "platform_data": {
+    "date": "2025-12-29",
+    "name": "狗狗纸巾挑战",
+    "rank": "15",
+    "type": "dy",
+    "viewnum": "320.5万"
+  }
+}
+
+### 场景 3: 检查相似词 - "萝卜纸巾挑战"（应该找到相似的已存在热词）
+POST {{baseUrl}}/api/v1/hotspots/check-exists
+Content-Type: application/json
+
+{
+  "keyword": "萝卜纸巾挑战"
+}
+
+### 场景 4: 添加第二个相似词 - "纸巾挑战狗狗版"
+POST {{baseUrl}}/api/v1/hotspots/add-keyword
+Content-Type: application/json
+
+{
+  "analysis": {
+    "id": "ID10",
+    "title": "纸巾挑战狗狗版",
+    "confidence": 0.88,
+    "primaryCategory": "待研究",
+    "tags": ["宠物", "挑战"],
+    "reasoning": {
+      "keep": ["与宠物相关的趣味挑战"],
+      "risk": []
+    },
+    "opportunities": ["制作教程视频", "开发宠物训练产品"],
+    "isRemove": false
+  },
+  "platform_data": {
+    "date": "2025-12-30",
+    "name": "纸巾挑战狗狗版",
+    "rank": "8",
+    "type": "bili",
+    "viewnum": "1.2亿"
+  }
+}
+
+### 场景 5: 检查相似词 - "狗考人纸巾挑战"（测试向量相似度）
+POST {{baseUrl}}/api/v1/hotspots/check-exists
+Content-Type: application/json
+
+{
+  "keyword": "狗考人纸巾挑战"
+}
+
+### 场景 6: 添加一个低价值词（来自微博）
+POST {{baseUrl}}/api/v1/hotspots/add-keyword
+Content-Type: application/json
+
+{
+  "analysis": {
+    "id": "ID11",
+    "title": "黄金白银价格波动",
+    "confidence": 0.9,
+    "primaryCategory": "低价值",
+    "tags": ["金融信息"],
+    "reasoning": {
+      "keep": [],
+      "risk": ["纯金融信息，无变现场景"]
+    },
+    "opportunities": [],
+    "isRemove": true
+  },
+  "platform_data": {
+    "date": "2025-12-30",
+    "name": "黄金白银价格波动",
+    "rank": "5",
+    "type": "wb",
+    "viewnum": "2300万"
+  }
+}
+
+### 场景 7: 添加来自快手的热词
+POST {{baseUrl}}/api/v1/hotspots/add-keyword
+Content-Type: application/json
+
+{
+  "analysis": {
+    "id": "ID12",
+    "title": "手工DIY圣诞装饰",
+    "confidence": 0.92,
+    "primaryCategory": "明确商机",
+    "tags": ["手工", "节日", "装饰"],
+    "reasoning": {
+      "keep": ["节日相关，有明确的商品销售机会"],
+      "risk": []
+    },
+    "opportunities": ["销售手工材料包", "制作教程课程", "成品装饰售卖"],
+    "isRemove": false
+  },
+  "platform_data": {
+    "date": "2025-12-30",
+    "name": "手工DIY圣诞装饰",
+    "rank": "3",
+    "type": "ks",
+    "viewnum": "890万"
+  }
+}
+
+### 场景 8: 添加来自知乎的热词
+POST {{baseUrl}}/api/v1/hotspots/add-keyword
+Content-Type: application/json
+
+{
+  "analysis": {
+    "id": "ID13",
+    "title": "AI编程工具推荐",
+    "confidence": 0.88,
+    "primaryCategory": "待研究",
+    "tags": ["技术", "AI", "工具"],
+    "reasoning": {
+      "keep": ["技术类话题，可能有知识付费机会"],
+      "risk": []
+    },
+    "opportunities": ["制作教程课程", "工具评测内容"],
+    "isRemove": false
+  },
+  "platform_data": {
+    "date": "2025-12-30",
+    "name": "AI编程工具推荐",
+    "rank": "12",
+    "type": "zhihu",
+    "viewnum": "156万"
+  }
+}
+
+### 场景 9: 测试完全一致的重复添加（应该更新 appearance_count）
+POST {{baseUrl}}/api/v1/hotspots/add-keyword
+Content-Type: application/json
+
+{
+  "analysis": {
+    "id": "ID14",
+    "title": "萝卜纸巾挑战开始狗考人了",
+    "confidence": 0.91,
+    "primaryCategory": "待研究",
+    "tags": ["热门梗"],
+    "reasoning": {
+      "keep": ["持续热门"],
+      "risk": []
+    },
+    "opportunities": ["开发相关周边产品"],
+    "isRemove": false
+  },
+  "platform_data": {
+    "date": "2025-12-31",
+    "name": "萝卜纸巾挑战开始狗考人了",
+    "rank": "8",
+    "type": "xhs",
+    "viewnum": "680万"
+  }
+}
+
+### 场景 10: 获取热点列表（查看所有添加的热词）
+GET {{baseUrl}}/api/v1/hotspots/list?page=1&page_size=20
+
+### 场景 11: 根据状态筛选 - 查看 rejected 状态的热词（低价值词）
+GET {{baseUrl}}/api/v1/hotspots/list?status=rejected&page=1&page_size=20
+
+### 场景 12: 根据状态筛选 - 查看 pending_validation 状态的热词（有价值词）
+GET {{baseUrl}}/api/v1/hotspots/list?status=pending_validation&page=1&page_size=20
+
+### 场景 13: 根据关键词搜索 - 搜索包含"挑战"的热词
+GET {{baseUrl}}/api/v1/hotspots/list?keyword=挑战&page=1&page_size=20
+
+### 场景 14: 检查一个不存在的热词（应该返回 exists=false, action=create）
+POST {{baseUrl}}/api/v1/hotspots/check-exists
+Content-Type: application/json
+
+{
+  "keyword": "完全不存在的热词12345"
+}
+
+### 场景 15: 获取热点详情（需要替换 {hotspot_id} 为实际ID）
+GET {{baseUrl}}/api/v1/hotspots/1
+
+### 场景 16: 关联两个相似热词到同一个簇（需要替换 ID）
+POST {{baseUrl}}/api/v1/hotspots/link
+Content-Type: application/json
+
+{
+  "source_hotspot_id": 2,
+  "target_hotspot_id": 1
+}
+
+### 场景 17: 更新热点状态 - 从 pending_validation 到 validated（需要替换 ID）
+PUT {{baseUrl}}/api/v1/hotspots/1/status
+Content-Type: application/json
+
+{
+  "status": "validated"
+}
+
+### 场景 18: 删除热点（需要替换 {hotspot_id} 为实际ID）
+DELETE {{baseUrl}}/api/v1/hotspots/999
+
+
+# ==================== 旧的测试用例（保留作为参考）====================
+
+### 1. 检查热词是否存在 - 黄金白银直线暴跌
+POST {{baseUrl}}/api/v1/hotspots/check-exists
+Content-Type: application/json
+
+{
+  "keyword": "黄金白银直线暴跌"
+}
+
+### 2. 新增低价值词 - 黄金白银直线暴跌
+POST {{baseUrl}}/api/v1/hotspots/add-keyword
+Content-Type: application/json
+
+{
+  "analysis": {
+    "id": "ID2",
+    "title": "黄金白银直线暴跌",
+    "confidence": 0.9,
+    "primaryCategory": "低价值",
+    "tags": [
+      "金融信息无变现场景"
+    ],
+    "reasoning": {
+      "keep": [],
+      "risk": [
+        "此内容无明确变现路径，不符合保留要求，应剔除"
+      ]
+    },
+    "opportunities": [],
+    "isRemove": true
+  }
+}
+
+### 3. 检查热词是否存在 - 数字技术助力颗粒归仓
+POST {{baseUrl}}/api/v1/hotspots/check-exists
+Content-Type: application/json
+
+{
+  "keyword": "数字技术助力颗粒归仓"
+}
+
+### 4. 新增待研究词 - 数字技术助力颗粒归仓
+POST {{baseUrl}}/api/v1/hotspots/add-keyword
+Content-Type: application/json
+
+{
+  "analysis": {
+    "id": "ID3",
+    "title": "数字技术助力颗粒归仓",
+    "confidence": 0.8,
+    "primaryCategory": "待研究",
+    "tags": [
+      "数字技术",
+      "新概念"
+    ],
+    "reasoning": {
+      "keep": [
+        "属于未知信息/新概念，默认保留待研究"
+      ],
+      "risk": []
+    },
+    "opportunities": [
+      "进一步研究数字技术在相关领域的应用及商业机会"
+    ],
+    "isRemove": false
+  }
+}
+
+### 5. 获取热点列表（查看新增的热词）
+GET {{baseUrl}}/api/v1/hotspots/list?page=1&page_size=20
+
+### 6. 根据状态筛选 - 查看 rejected 状态的热词
+GET {{baseUrl}}/api/v1/hotspots/list?status=rejected&page=1&page_size=20
+
+### 7. 根据状态筛选 - 查看 pending_validation 状态的热词
+GET {{baseUrl}}/api/v1/hotspots/list?status=pending_validation&page=1&page_size=20
+
+### 8. 根据关键词搜索 - 搜索"黄金"
+GET {{baseUrl}}/api/v1/hotspots/list?keyword=黄金&page=1&page_size=20
+
+### 9. 获取热点详情（需要替换 {hotspot_id} 为实际ID）
+GET {{baseUrl}}/api/v1/hotspots/1
+
+### 10. 更新热点状态 - 从 pending_validation 到 validated（需要替换 {hotspot_id}）
+PUT {{baseUrl}}/api/v1/hotspots/1/status
+Content-Type: application/json
+
+{
+  "status": "validated"
+}
+
+### 11. 删除热点（需要替换 {hotspot_id} 为实际ID）
+DELETE {{baseUrl}}/api/v1/hotspots/1
+
+
+

@@ -6,6 +6,7 @@ import Proxy from '@/pages/Proxy'
 import Tasks from '@/pages/Tasks'
 import Contents from '@/pages/Contents'
 import Vectors from '@/pages/Vectors'
+import Hotspots from '@/pages/Hotspots'
 
 function AppRoutes() {
   return (
@@ -19,6 +20,7 @@ function AppRoutes() {
         <Route path="contents/:platform" element={<Contents />} />
         <Route path="contents" element={<Navigate to="/contents/xhs" replace />} />
         <Route path="vectors" element={<Vectors />} />
+        <Route path="hotspots" element={<Hotspots />} />
       </Route>
     </Routes>
   )

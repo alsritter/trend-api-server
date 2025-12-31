@@ -7,39 +7,6 @@ from pgvector.asyncpg import register_vector
 pg_pool: asyncpg.Pool = None
 
 
-async def init_vector_table():
-    """
-    初始化向量数据库表结构
-
-    创建 modeldata 表，用于存储向量数据
-    包含 id, vector, collection_id, metadata, createtime 字段
-    """
-    global pg_pool
-
-    if pg_pool is None:
-        raise RuntimeError(
-            "PgVector pool not initialized. Call init_vector_db() first."
-        )
-
-    async with pg_pool.acquire() as conn:
-        # 启用 pgvector 扩展
-        await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
-
-        # 创建 modeldata 表
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS modeldata(
-                id SERIAL NOT NULL,
-                vector vector NOT NULL,
-                collection_id varchar(50) NOT NULL,
-                content text,
-                metadata jsonb,
-                model_name varchar(100) NOT NULL DEFAULT 'qwen3-embedding-8b',
-                createtime timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-                PRIMARY KEY(id)
-            )
-        """)
-
-
 async def init_vector_db():
     """初始化 PgVector 数据库连接池和表结构"""
     global pg_pool
@@ -56,9 +23,6 @@ async def init_vector_db():
     print(
         f"PgVector connection pool initialized: {settings.PGVECTOR_HOST}:{settings.PGVECTOR_PORT}/{settings.PGVECTOR_DB}"
     )
-
-    # 初始化表结构
-    await init_vector_table()
 
 
 async def close_vector_db():

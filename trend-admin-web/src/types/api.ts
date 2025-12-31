@@ -283,3 +283,262 @@ export interface ListCollectionsResponse {
   success: boolean;
   collections: CollectionInfo[];
 }
+
+// ==================== 热点管理相关类型 ====================
+
+// 热点状态枚举
+export type HotspotStatus =
+  | 'pending_validation'  // 等待持续性验证
+  | 'validated'           // 已验证有持续性
+  | 'rejected'            // 已过滤（无商业价值）
+  | 'crawling'            // 爬虫进行中
+  | 'crawled'             // 爬取完成
+  | 'analyzing'           // 商业分析中
+  | 'analyzed'            // 分析完成
+  | 'archived';           // 已归档
+
+// 优先级枚举
+export type Priority = 'high' | 'medium' | 'low';
+
+// 推送状态枚举
+export type PushStatus = 'pending' | 'sent' | 'failed';
+
+// 平台信息
+export interface PlatformInfo {
+  platform: string;
+  rank: number;
+  heat_score?: number;
+  seen_at: string;
+}
+
+// 推理详情
+export interface ReasoningDetail {
+  keep: string[];
+  risk: string[];
+}
+
+// AI 热词分析结果
+export interface KeywordAnalysis {
+  id: string;
+  title: string;
+  confidence: number;
+  primaryCategory: string;
+  tags: string[];
+  reasoning: ReasoningDetail;
+  opportunities: string[];
+  isRemove: boolean;
+}
+
+// 热点详情
+export interface HotspotDetail {
+  id: number;
+  keyword: string;
+  normalized_keyword: string;
+  embedding_model?: string;
+  cluster_id?: number;
+  first_seen_at: string;
+  last_seen_at: string;
+  appearance_count: number;
+  platforms: PlatformInfo[];
+  status: HotspotStatus;
+  last_crawled_at?: string;
+  crawl_count: number;
+  crawl_started_at?: string;
+  crawl_failed_count: number;
+  is_filtered: boolean;
+  filter_reason?: string;
+  filtered_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// 相似热点
+export interface SimilarHotspot {
+  id: number;
+  keyword: string;
+  normalized_keyword: string;
+  status: HotspotStatus;
+  first_seen_at: string;
+  last_seen_at: string;
+  appearance_count: number;
+  similarity: number;
+  cluster_id?: number;
+}
+
+// 虚拟产品分析
+export interface VirtualProductAnalysis {
+  opportunities: string[];
+  feasibility_score: number;
+}
+
+// 实体产品分析
+export interface PhysicalProductAnalysis {
+  opportunities: string[];
+  feasibility_score: number;
+}
+
+// 商业报告内容
+export interface BusinessReportContent {
+  summary: string;
+  virtual_products: VirtualProductAnalysis;
+  physical_products: PhysicalProductAnalysis;
+  target_audience: string[];
+  market_size: string;
+  recommendations: string[];
+}
+
+// 商业报告信息
+export interface BusinessReportInfo {
+  id: number;
+  hotspot_id: number;
+  report: BusinessReportContent;
+  score: number;
+  priority: Priority;
+  product_types?: string[];
+  analyzed_at: string;
+  created_at: string;
+}
+
+// 推送队列项
+export interface PushQueueItem {
+  id: number;
+  hotspot_id: number;
+  report_id: number;
+  priority: Priority;
+  score: number;
+  status: PushStatus;
+  channels: string[];
+  scheduled_at?: string;
+  sent_at?: string;
+  retry_count: number;
+  error_message?: string;
+  created_at: string;
+  updated_at: string;
+  keyword?: string;
+  report?: BusinessReportContent;
+}
+
+// ========== 请求/响应类型 ==========
+
+// 添加热词请求
+export interface AddHotspotKeywordRequest {
+  analysis: KeywordAnalysis;
+  platform_data?: {
+    date?: string;
+    name?: string;
+    rank?: string | number;
+    type?: string;
+    viewnum?: string;
+    url?: string;
+    icon?: string;
+    word_cover?: any;
+    word_type?: string;
+  };
+}
+
+export interface AddHotspotKeywordResponse {
+  success: boolean;
+  hotspot_id?: number;
+  message: string;
+  action: string; // created/rejected/updated
+}
+
+// 检查热词请求
+export interface CheckHotspotRequest {
+  keyword: string;
+}
+
+export interface CheckHotspotResponse {
+  exists: boolean;
+  action: string; // skip/update/ask_llm/create
+  hotspot_id?: number;
+  similar_hotspots: SimilarHotspot[];
+  message: string;
+}
+
+// 关联热点请求
+export interface LinkHotspotsRequest {
+  source_hotspot_id: number;
+  target_hotspot_id: number;
+}
+
+export interface LinkHotspotsResponse {
+  success: boolean;
+  message: string;
+  cluster_id: number;
+}
+
+// 更新状态请求
+export interface UpdateHotspotStatusRequest {
+  status: HotspotStatus;
+}
+
+export interface UpdateHotspotStatusResponse {
+  success: boolean;
+  message: string;
+}
+
+// 添加商业报告请求
+export interface AddBusinessReportRequest {
+  hotspot_id: number;
+  report: BusinessReportContent;
+  score: number;
+  priority: Priority;
+  product_types: string[];
+}
+
+export interface AddBusinessReportResponse {
+  success: boolean;
+  report_id: number;
+  message: string;
+}
+
+// 添加到推送队列请求
+export interface AddToPushQueueRequest {
+  hotspot_id: number;
+  report_id: number;
+  channels: string[];
+}
+
+export interface AddToPushQueueResponse {
+  success: boolean;
+  push_id: number;
+  message: string;
+}
+
+// 获取待推送项响应
+export interface GetPendingPushResponse {
+  success: boolean;
+  items: PushQueueItem[];
+  count: number;
+}
+
+// 列出热点请求
+export interface ListHotspotsRequest {
+  page?: number;
+  page_size?: number;
+  status?: HotspotStatus;
+  keyword?: string;
+}
+
+export interface ListHotspotsResponse {
+  success: boolean;
+  total: number;
+  page: number;
+  page_size: number;
+  items: HotspotDetail[];
+}
+
+export interface DeleteHotspotResponse {
+  success: boolean;
+  message: string;
+}
+
+// 获取同簇热点响应
+export interface GetClusterHotspotsResponse {
+  success: boolean;
+  cluster_id: number;
+  items: HotspotDetail[];
+  count: number;
+}
+
