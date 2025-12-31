@@ -191,10 +191,14 @@ class HotspotService:
                 viewnum_str = platform_data.get("viewnum", "0")
                 heat_score = self._parse_viewnum(viewnum_str)
 
+                # 安全地转换 rank,处理空字符串的情况
+                rank_value = platform_data.get("rank", 0)
+                rank = int(rank_value) if rank_value and str(rank_value).strip() else 0
+
                 platforms = [
                     {
                         "platform": platform_name,
-                        "rank": int(platform_data.get("rank", 0)),
+                        "rank": rank,
                         "heat_score": heat_score,
                         "seen_at": platform_data.get(
                             "date", datetime.now().isoformat()
