@@ -5,7 +5,7 @@ export const contentsApi = {
   // 获取笔记/视频列表
   getNotes: (
     platform: string,
-    params: { keyword?: string; page?: number; page_size?: number }
+    params: { keyword?: string; hotspot_id?: number; page?: number; page_size?: number }
   ) =>
     apiClient.get<any, PaginationResponse<any>>(
       `/api/v1/contents/${platform}/notes`,

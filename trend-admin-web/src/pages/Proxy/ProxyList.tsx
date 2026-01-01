@@ -2,14 +2,12 @@ import { Card, Table, Button, Tag, Space, Modal, message } from 'antd'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { proxyApi } from '@/api/proxy'
 import { formatCountdown } from '@/utils/format'
-import { ReloadOutlined, DeleteOutlined, CheckCircleOutlined } from '@ant-design/icons'
+import { ReloadOutlined, DeleteOutlined } from '@ant-design/icons'
 import { useState } from 'react'
-import type { ProxyIpInfo } from '@/types/api'
 
 function ProxyList() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
-  const [validatingIp, setValidatingIp] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
   const { data, isLoading, refetch } = useQuery({
@@ -27,21 +25,6 @@ function ProxyList() {
     },
   })
 
-  const validateMutation = useMutation({
-    mutationFn: proxyApi.validateIp,
-    onSuccess: (result, variables) => {
-      setValidatingIp(null)
-      if (result.is_valid) {
-        message.success(`IP ${variables.ip}:${variables.port} 验证成功！响应时间: ${result.response_time}s`)
-      } else {
-        message.error(`IP ${variables.ip}:${variables.port} 验证失败: ${result.error_message}`)
-      }
-    },
-    onError: () => {
-      setValidatingIp(null)
-    },
-  })
-
   const handleClearAll = () => {
     Modal.confirm({
       title: '确认清空',
@@ -50,14 +33,6 @@ function ProxyList() {
       okType: 'danger',
       cancelText: '取消',
       onOk: () => clearMutation.mutate(),
-    })
-  }
-
-  const handleValidate = (record: ProxyIpInfo) => {
-    setValidatingIp(`${record.ip}:${record.port}`)
-    validateMutation.mutate({
-      ip: record.ip,
-      port: record.port,
     })
   }
 
@@ -84,10 +59,22 @@ function ProxyList() {
       ),
     },
     {
+      title: 'TTL',
+      dataIndex: 'ttl',
+      key: 'ttl',
+      width: 150,
+      render: (ttl: number) => {
+        if (!ttl || ttl <= 0) return <Tag color="default">已过期</Tag>
+        const minutes = Math.floor(ttl / 60)
+        const seconds = ttl % 60
+        return <Tag color="processing">{minutes}分{seconds}秒</Tag>
+      },
+    },
+    {
       title: '过期时间',
       dataIndex: 'expired_time_ts',
       key: 'expired_time_ts',
-      width: 150,
+      width: 180,
       render: (timestamp: number) => formatCountdown(timestamp),
     },
     {
@@ -101,21 +88,6 @@ function ProxyList() {
         ) : (
           <Tag color="error">已过期</Tag>
         )
-      ),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 120,
-      render: (_: any, record: ProxyIpInfo) => (
-        <Button
-          type="link"
-          icon={<CheckCircleOutlined />}
-          loading={validatingIp === `${record.ip}:${record.port}`}
-          onClick={() => handleValidate(record)}
-        >
-          验证
-        </Button>
       ),
     },
   ]

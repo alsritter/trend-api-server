@@ -62,8 +62,11 @@ export interface ProxyIpInfo {
   ip: string;
   port: number;
   protocol: string;
+  user?: string;
+  password?: string;
   expired_time_ts: number;
   is_valid: boolean;
+  ttl?: number;
 }
 
 export interface ProxyStats {
@@ -161,7 +164,11 @@ export interface Note {
   last_update_time?: number; // 笔记最后更新时间戳（数据库字段）
   add_ts?: number;
   last_modify_ts?: number;
-  
+
+  // 热词关联字段
+  hotspot_id?: number;
+  hotspot_keyword?: string;
+
   // 小红书特定字段
   type?: string; // video 或 normal
   liked_count?: number;
@@ -170,31 +177,31 @@ export interface Note {
   share_count?: number;
   image_list?: string;
   video_url?: string;
-  
+
   // 抖音/快手特定字段
   video_play_count?: number;
   video_share_count?: number;
   aweme_id?: string;
   video_id?: string;
-  
+
   // B站特定字段
   video_danmaku?: number;
   video_comment?: number;
   video_like_count?: number;
   video_collect?: number;
   bvid?: string;
-  
+
   // 微博特定字段
   attitudes_count?: number;
   comments_count?: number;
   reposts_count?: number;
   mblogid?: string;
-  
+
   // 贴吧特定字段
   total_replay_page?: number;
   view_count?: number;
   thread_id?: string;
-  
+
   // 知乎特定字段
   content_type?: string;
   voteup_count?: number;

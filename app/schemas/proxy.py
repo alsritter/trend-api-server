@@ -26,8 +26,11 @@ class ProxyIpInfo(BaseModel):
     ip: str = Field(..., description="IP 地址")
     port: int = Field(..., description="端口号")
     protocol: str = Field(..., description="协议类型 (http/https)")
+    user: Optional[str] = Field(None, description="认证用户名")
+    password: Optional[str] = Field(None, description="认证密码")
     expired_time_ts: int = Field(..., description="过期时间戳")
     is_valid: bool = Field(..., description="是否有效")
+    ttl: Optional[int] = Field(None, description="剩余生存时间(秒)")
 
 
 class ProxyIpListResponse(BaseModel):

@@ -4,6 +4,8 @@ import aiomysql
 from app.schemas.content import ContentListResponse, CommentListResponse
 from app.schemas.common import APIResponse
 from app.dependencies import get_db
+from app.db.vector_session import get_vector_db
+import asyncpg
 
 router = APIRouter()
 
@@ -56,16 +58,19 @@ PLATFORM_TIME_FIELDS = {
 async def list_contents(
     platform: str,
     keyword: Optional[str] = Query(None, description="关键词搜索（标题或内容）"),
+    hotspot_id: Optional[int] = Query(None, description="热词ID过滤"),
     start_date: Optional[str] = Query(None, description="开始日期 (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="结束日期 (YYYY-MM-DD)"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    conn: aiomysql.Connection = Depends(get_db),
+    mysql_conn: aiomysql.Connection = Depends(get_db),
+    pg_conn: asyncpg.Connection = Depends(get_vector_db),
 ):
     """
     查询平台内容列表（笔记/视频）
 
     支持的平台: xhs, dy, ks, bili, wb, tieba, zhihu
+    支持按热词ID过滤，返回该热词关联的所有内容
     """
     if platform not in PLATFORM_CONTENT_TABLES:
         raise HTTPException(status_code=400, detail=f"Unsupported platform: {platform}")
@@ -74,18 +79,42 @@ async def list_contents(
     time_field = PLATFORM_TIME_FIELDS[platform]
 
     try:
-        async with conn.cursor(aiomysql.DictCursor) as cursor:
+        # 如果提供了 hotspot_id，验证热词是否存在
+        if hotspot_id:
+            hotspot_result = await pg_conn.fetchrow(
+                "SELECT id, keyword FROM hotspots WHERE id = $1",
+                hotspot_id
+            )
+            if not hotspot_result:
+                raise HTTPException(status_code=404, detail=f"热词 {hotspot_id} 不存在")
+
+        # 从 MySQL 查询内容数据
+        async with mysql_conn.cursor(aiomysql.DictCursor) as cursor:
             # 构建查询条件
             where_clauses = []
             params = []
 
+            # 热词ID过滤 - 直接使用 hotspot_id 字段
+            if hotspot_id:
+                where_clauses.append("hotspot_id = %s")
+                params.append(hotspot_id)
+
+            # 关键词搜索
             if keyword:
-                # 不同平台的字段名可能不同，这里使用通用的方式
                 where_clauses.append(
                     "(title LIKE %s OR `desc` LIKE %s OR content LIKE %s)"
                 )
                 keyword_pattern = f"%{keyword}%"
                 params.extend([keyword_pattern, keyword_pattern, keyword_pattern])
+
+            # 时间范围过滤
+            if start_date:
+                where_clauses.append(f"{time_field} >= %s")
+                params.append(f"{start_date} 00:00:00")
+
+            if end_date:
+                where_clauses.append(f"{time_field} <= %s")
+                params.append(f"{end_date} 23:59:59")
 
             where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
@@ -106,6 +135,28 @@ async def list_contents(
             await cursor.execute(data_sql, params + [page_size, offset])
             items = await cursor.fetchall()
 
+            # 如果结果中有 hotspot_id，从 PostgreSQL 获取对应的关键词信息
+            hotspot_ids = set()
+            for item in items:
+                hid = item.get("hotspot_id")
+                if hid is not None and hid != "":
+                    # 确保转换为整数类型
+                    hotspot_ids.add(int(hid) if isinstance(hid, str) else hid)
+
+            # 批量查询热词信息
+            hotspot_map = {}
+            if hotspot_ids:
+                hotspots = await pg_conn.fetch(
+                    "SELECT id, keyword FROM hotspots WHERE id = ANY($1::int[])",
+                    list(hotspot_ids)
+                )
+                hotspot_map = {h["id"]: h["keyword"] for h in hotspots}
+
+            # 为每个 item 添加 hotspot_keyword
+            for item in items:
+                hid = item.get("hotspot_id")
+                item["hotspot_keyword"] = hotspot_map.get(int(hid)) if hid and hid != "" else None
+
             return APIResponse(
                 code=0,
                 message="success",
@@ -113,6 +164,8 @@ async def list_contents(
                     total=total, page=page, page_size=page_size, items=items
                 ),
             )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to query contents: {str(e)}"

@@ -1,10 +1,10 @@
-import { Card, Tabs, Table, Input, DatePicker, Space } from 'antd'
+import { Card, Tabs, Table, Input, DatePicker, Space, Tag } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { contentsApi } from '@/api/contents'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { PLATFORM_OPTIONS } from '@/utils/constants'
 import { formatDateTime } from '@/utils/format'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import NoteDetailDrawer from '@/components/NoteDetailDrawer'
 import type { Note } from '@/types/api'
 
@@ -14,17 +14,31 @@ const { Search } = Input
 function Contents() {
   const { platform = 'xhs' } = useParams()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [keyword, setKeyword] = useState('')
+  const [hotspotId, setHotspotId] = useState<number | undefined>(undefined)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [selectedNote, setSelectedNote] = useState<Note | null>(null)
   const [drawerVisible, setDrawerVisible] = useState(false)
 
+  // 从 URL 参数初始化热词 ID
+  useEffect(() => {
+    const hotspotIdParam = searchParams.get('hotspot_id')
+    if (hotspotIdParam) {
+      setHotspotId(Number(hotspotIdParam))
+    } else {
+      // 当 URL 中没有 hotspot_id 时，清空状态
+      setHotspotId(undefined)
+    }
+  }, [searchParams])
+
   const { data, isLoading } = useQuery({
-    queryKey: ['contents', platform, keyword, page, pageSize],
+    queryKey: ['contents', platform, keyword, hotspotId, page, pageSize],
     queryFn: () =>
       contentsApi.getNotes(platform, {
         keyword,
+        hotspot_id: hotspotId,
         page,
         page_size: pageSize,
       }),
@@ -40,6 +54,20 @@ function Contents() {
   const handleSearch = (value: string) => {
     setKeyword(value)
     setPage(1)
+    setHotspotId(undefined)
+    setSearchParams({})
+  }
+
+  const handleHotspotIdSearch = (value: string) => {
+    const id = value.trim() ? Number(value.trim()) : undefined
+    setHotspotId(id)
+    setPage(1)
+    setKeyword('')
+    if (id) {
+      setSearchParams({ hotspot_id: id.toString() })
+    } else {
+      setSearchParams({})
+    }
   }
 
   const handleRowClick = (record: Note) => {
@@ -73,6 +101,32 @@ function Contents() {
         dataIndex: 'nickname',
         key: 'nickname',
         width: 150,
+      },
+      {
+        title: '关联热词',
+        dataIndex: 'hotspot_keyword',
+        key: 'hotspot_keyword',
+        width: 250,
+        render: (keyword: string, record: Note) => {
+          if (!keyword) return <Tag color="default">-</Tag>
+          return (
+            <Tag
+              color="blue"
+              style={{ cursor: 'pointer' }}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (record.hotspot_id) {
+                  setHotspotId(record.hotspot_id)
+                  setKeyword('')
+                  setPage(1)
+                  setSearchParams({ hotspot_id: record.hotspot_id.toString() })
+                }
+              }}
+            >
+              {keyword}
+            </Tag>
+          )
+        },
       },
     ]
 
@@ -144,6 +198,22 @@ function Contents() {
             onSearch={handleSearch}
             style={{ width: 300 }}
             allowClear
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+          />
+          <Search
+            placeholder="按热词ID搜索"
+            onSearch={handleHotspotIdSearch}
+            style={{ width: 200 }}
+            allowClear
+            value={hotspotId?.toString() || ''}
+            onChange={(e) => {
+              const value = e.target.value
+              if (value === '') {
+                setHotspotId(undefined)
+                setSearchParams({})
+              }
+            }}
           />
           <RangePicker placeholder={['开始日期', '结束日期']} />
         </Space>

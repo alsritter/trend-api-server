@@ -120,30 +120,41 @@ class ProxyConfigManager:
         redis_client = None
 
         try:
-            # 连接 Redis
+            # 连接 Redis (不使用 decode_responses，因为数据是 pickle 序列化的)
             redis_client = redis.Redis(
                 host=redis_host,
                 port=redis_port,
                 password=redis_password,
                 db=redis_db,
-                decode_responses=True
+                decode_responses=False  # 改为 False 以支持 pickle 二进制数据
             )
 
             # 获取所有匹配的 key
-            keys = await redis_client.keys(provider_pattern)
+            keys = await redis_client.keys(provider_pattern.encode())
 
             current_time = int(time.time())
 
             # 遍历每个 key 获取 IP 信息
             for key in keys:
                 try:
+                    # 解码 key
+                    key_str = key.decode() if isinstance(key, bytes) else key
+
                     # 获取 key 的值
                     value = await redis_client.get(key)
                     if not value:
                         continue
 
-                    # 解析 JSON 数据
-                    ip_data = json.loads(value)
+                    # 尝试反序列化 pickle 数据
+                    import pickle
+                    try:
+                        ip_data = pickle.loads(value)
+                        # 如果 ip_data 是字符串，尝试解析为 JSON
+                        if isinstance(ip_data, str):
+                            ip_data = json.loads(ip_data)
+                    except (pickle.UnpicklingError, TypeError):
+                        # 如果不是 pickle，尝试作为 JSON 解析
+                        ip_data = json.loads(value.decode() if isinstance(value, bytes) else value)
 
                     # 从数据中直接获取 IP 和端口（优先使用数据中的值）
                     ip = ip_data.get("ip", "")
@@ -152,7 +163,7 @@ class ProxyConfigManager:
                     # 如果数据中没有，则尝试从 key 中解析
                     # key 格式: {provider}_{ip}_{port}
                     if not ip or not port:
-                        parts = key.split("_")
+                        parts = key_str.split("_")
                         if len(parts) >= 3:
                             ip = ip or parts[-2]
                             port = port or int(parts[-1])
@@ -162,19 +173,25 @@ class ProxyConfigManager:
                     # 去除协议后缀 :// 只保留协议名称
                     protocol = protocol.replace("://", "").lower()
 
+                    # 获取 TTL
+                    ttl = await redis_client.ttl(key)
+
                     # 构建 IP 信息
                     ip_info = {
                         "ip": ip,
                         "port": int(port) if isinstance(port, str) else port,
                         "protocol": protocol,
+                        "user": ip_data.get("user", ""),
+                        "password": ip_data.get("password", ""),
                         "expired_time_ts": ip_data.get("expired_time_ts", 0),
-                        "is_valid": ip_data.get("expired_time_ts", 0) > current_time
+                        "is_valid": ip_data.get("expired_time_ts", 0) > current_time,
+                        "ttl": ttl if ttl > 0 else 0
                     }
 
                     ip_list.append(ip_info)
 
                 except (json.JSONDecodeError, KeyError, ValueError) as e:
-                    print(f"解析 IP 数据失败 (key={key}): {str(e)}")
+                    print(f"解析 IP 数据失败 (key={key_str}): {str(e)}")
                     continue
 
             return ip_list
@@ -211,17 +228,17 @@ class ProxyConfigManager:
         redis_client = None
 
         try:
-            # 连接 Redis
+            # 连接 Redis (不使用 decode_responses)
             redis_client = redis.Redis(
                 host=redis_host,
                 port=redis_port,
                 password=redis_password,
                 db=redis_db,
-                decode_responses=True
+                decode_responses=False
             )
 
             # 获取所有匹配的 key
-            keys = await redis_client.keys(provider_pattern)
+            keys = await redis_client.keys(provider_pattern.encode())
 
             if not keys:
                 return 0
