@@ -19,8 +19,8 @@ jobs:
       service-type: ""
       env-from-configmap: "biz-radar-config"
       env-from-secret: ""
-      resource-limits-memory: "1024Mi"
-      resource-requests-memory: "256Mi"
+      resource-limits-memory: "4096Mi"
+      resource-requests-memory: "1024Mi"
     secrets:
       ALIYUN_USERNAME_K8S: ${{ secrets.ALIYUN_USERNAME_K8S }}
       ALIYUN_PASSWORD_K8S: ${{ secrets.ALIYUN_PASSWORD_K8S }}
