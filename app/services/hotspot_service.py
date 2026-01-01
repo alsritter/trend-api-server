@@ -104,6 +104,7 @@ class HotspotService:
             embedding = await vector_service.generate_embedding(analysis.title)
 
             # 检查是否存在高相似度的热词(>=85%)，如果存在则关联到同一个cluster
+            # 如果不存在相似的热词，则为该热词创建一个新的独立cluster
             cluster_id = None
             seven_days_ago = datetime.now() - timedelta(days=7)
 
@@ -170,6 +171,18 @@ class HotspotService:
                             cluster_id,
                             similar_record["id"],
                         )
+
+            # 如果没有找到相似的热词，创建一个新的独立cluster
+            if cluster_id is None:
+                cluster_id = await conn.fetchval(
+                    """
+                    INSERT INTO hotspot_clusters (cluster_name, member_count, keywords)
+                    VALUES ($1, 1, $2)
+                    RETURNING id
+                    """,
+                    analysis.title,  # 使用热词本身作为cluster名称
+                    json.dumps([analysis.title]),
+                )
 
             # 平台名称映射
             platform_name_map = {
