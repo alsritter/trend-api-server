@@ -19,6 +19,9 @@ from app.schemas.hotspot import (
     GetClusterHotspotsResponse,
     LinkHotspotRequest,
     LinkHotspotResponse,
+    ListValidatedHotspotsResponse,
+    UpdateHotspotStatusRequest,
+    UpdateHotspotStatusResponse,
     HotspotStatus,
     HotspotDetail,
 )
@@ -182,7 +185,9 @@ async def list_hotspots(
     status: Optional[HotspotStatus] = Query(None, description="状态过滤"),
     keyword: Optional[str] = Query(None, description="关键词搜索"),
     similarity_search: Optional[str] = Query(None, description="相似度搜索关键词"),
-    similarity_threshold: float = Query(default=0.7, ge=0.0, le=1.0, description="相似度阈值"),
+    similarity_threshold: float = Query(
+        default=0.7, ge=0.0, le=1.0, description="相似度阈值"
+    ),
 ):
     """
     列出热点（分页、过滤、搜索）
@@ -316,5 +321,84 @@ async def link_hotspot(request: LinkHotspotRequest):
         logger.error(
             f"关联热点时发生错误 - keyword: {request.keyword}, "
             f"source_hotspot_id: {request.hotspot_id}, error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/validated/list", response_model=ListValidatedHotspotsResponse)
+async def list_validated_hotspots(
+    hours: int = Query(
+        default=24,
+        ge=1,
+        le=168,
+        description="时间范围（小时），默认 24 小时，最大 7 天",
+    ),
+):
+    """
+    获取所有 validated 状态的热词列表
+
+    功能：
+    - 每个 cluster 只返回一个热词（根据 selected_hotspot_id）
+    - 如果 cluster 没有 selected_hotspot_id，自动选择第一个并设置
+    - 没有 cluster 的热词直接返回
+    - 保证每次返回的都是同一个热词（通过 selected_hotspot_id 字段标识）
+    - 支持时间范围过滤，默认返回最近 24 小时的数据
+
+    参数：
+    - hours: 时间范围（小时），默认 24 小时，最大 168 小时（7 天）
+    """
+    try:
+        result = await hotspot_service.list_validated_hotspots(hours=hours)
+        return ListValidatedHotspotsResponse(
+            success=True,
+            total=result["total"],
+            items=result["items"],
+        )
+    except Exception as e:
+        logger.error(
+            f"获取待验证热词列表时发生错误 - hours: {hours}, error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/{hotspot_id}/status", response_model=UpdateHotspotStatusResponse)
+async def update_hotspot_status(hotspot_id: int, request: UpdateHotspotStatusRequest):
+    """
+    更新热词状态
+
+    功能：
+    - 手动更新热词的状态
+    - 支持所有状态的更新：pending_validation, validated, rejected, crawling, crawled, analyzing, analyzed, archived
+
+    参数：
+    - hotspot_id: 热词ID
+    - status: 新的状态
+
+    常用场景：
+    - 将 validated 改为 crawling（开始爬取）
+    - 将 crawled 改为 analyzing（开始分析）
+    - 将热词标记为 archived（归档）
+    - 将错误状态的热词改回正确状态
+    """
+    try:
+        result = await hotspot_service.update_hotspot_status(
+            hotspot_id=hotspot_id, new_status=request.status
+        )
+        return UpdateHotspotStatusResponse(
+            success=result["success"],
+            message=result["message"],
+            old_status=result["old_status"],
+            new_status=result["new_status"],
+        )
+    except ValueError as e:
+        logger.error(
+            f"更新热词状态失败(未找到) - hotspot_id: {hotspot_id}, "
+            f"new_status: {request.status}, error: {str(e)}"
+        )
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(
+            f"更新热词状态时发生错误 - hotspot_id: {hotspot_id}, "
+            f"new_status: {request.status}, error: {str(e)}, traceback: {traceback.format_exc()}"
         )
         raise HTTPException(status_code=500, detail=str(e))

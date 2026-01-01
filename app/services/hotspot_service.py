@@ -1065,6 +1065,221 @@ class HotspotService:
                     "message": f"成功创建关联热点 '{keyword}' (ID: {new_hotspot_id})，已关联到簇 {cluster_id}",
                 }
 
+    async def list_validated_hotspots(self, hours: int = 24) -> Dict[str, Any]:
+        """
+        获取所有 validated 状态的热词列表，每个 cluster 只返回一个热词
+
+        规则：
+        1. 如果 cluster 有 selected_hotspot_id，返回该热词
+        2. 如果 cluster 没有 selected_hotspot_id，自动选择该 cluster 下第一个 validated 热词并设置
+        3. 对于没有 cluster_id 的热词，直接返回
+        4. 默认只返回最近 24 小时内更新的热词
+
+        Args:
+            hours: 时间范围（小时），默认 24 小时
+
+        Returns:
+            包含 total, items 的字典
+        """
+        async with vector_session.pg_pool.acquire() as conn:
+            async with conn.transaction():
+                # 计算时间阈值
+                time_threshold = datetime.now() - timedelta(hours=hours)
+
+                # 1. 获取所有有 cluster 且有 selected_hotspot_id 的热词
+                selected_hotspots = await conn.fetch(
+                    """
+                    SELECT DISTINCT ON (h.cluster_id)
+                        h.id,
+                        h.keyword,
+                        h.cluster_id,
+                        h.first_seen_at,
+                        h.last_seen_at,
+                        h.appearance_count,
+                        h.platforms,
+                        h.created_at,
+                        h.updated_at
+                    FROM hotspots h
+                    INNER JOIN hotspot_clusters c ON h.cluster_id = c.id
+                    WHERE h.status = $1
+                        AND c.selected_hotspot_id IS NOT NULL
+                        AND h.id = c.selected_hotspot_id
+                        AND h.last_seen_at >= $2
+                    ORDER BY h.cluster_id, h.last_seen_at DESC
+                    """,
+                    HotspotStatus.VALIDATED.value,
+                    time_threshold,
+                )
+
+                # 2. 获取所有有 cluster 但没有 selected_hotspot_id 的 cluster
+                clusters_without_selection = await conn.fetch(
+                    """
+                    SELECT DISTINCT c.id as cluster_id
+                    FROM hotspot_clusters c
+                    INNER JOIN hotspots h ON h.cluster_id = c.id
+                    WHERE c.selected_hotspot_id IS NULL
+                        AND h.status = $1
+                        AND h.last_seen_at >= $2
+                    """,
+                    HotspotStatus.VALIDATED.value,
+                    time_threshold,
+                )
+
+                # 为这些 cluster 选择并设置 selected_hotspot_id
+                newly_selected_hotspots = []
+                for cluster_record in clusters_without_selection:
+                    cluster_id = cluster_record["cluster_id"]
+
+                    # 获取该 cluster 下第一个 validated 热词（在时间范围内）
+                    first_hotspot = await conn.fetchrow(
+                        """
+                        SELECT
+                            h.id,
+                            h.keyword,
+                            h.cluster_id,
+                            h.first_seen_at,
+                            h.last_seen_at,
+                            h.appearance_count,
+                            h.platforms,
+                            h.created_at,
+                            h.updated_at
+                        FROM hotspots h
+                        WHERE h.cluster_id = $1
+                            AND h.status = $2
+                            AND h.last_seen_at >= $3
+                        ORDER BY h.last_seen_at DESC
+                        LIMIT 1
+                        """,
+                        cluster_id,
+                        HotspotStatus.VALIDATED.value,
+                        time_threshold,
+                    )
+
+                    if first_hotspot:
+                        # 更新 cluster 的 selected_hotspot_id
+                        await conn.execute(
+                            """
+                            UPDATE hotspot_clusters
+                            SET selected_hotspot_id = $1,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = $2
+                            """,
+                            first_hotspot["id"],
+                            cluster_id,
+                        )
+                        newly_selected_hotspots.append(first_hotspot)
+
+                # 3. 获取所有没有 cluster_id 的 validated 热词（在时间范围内）
+                no_cluster_hotspots = await conn.fetch(
+                    """
+                    SELECT
+                        h.id,
+                        h.keyword,
+                        h.cluster_id,
+                        h.first_seen_at,
+                        h.last_seen_at,
+                        h.appearance_count,
+                        h.platforms,
+                        h.created_at,
+                        h.updated_at
+                    FROM hotspots h
+                    WHERE h.status = $1
+                        AND h.cluster_id IS NULL
+                        AND h.last_seen_at >= $2
+                    ORDER BY h.last_seen_at DESC
+                    """,
+                    HotspotStatus.VALIDATED.value,
+                    time_threshold,
+                )
+
+                # 合并所有结果
+                all_hotspots = (
+                    list(selected_hotspots)
+                    + newly_selected_hotspots
+                    + list(no_cluster_hotspots)
+                )
+
+                from app.schemas.hotspot import ValidatedHotspotItem, PlatformInfo
+
+                items = [
+                    ValidatedHotspotItem(
+                        id=r["id"],
+                        keyword=r["keyword"],
+                        cluster_id=r["cluster_id"],
+                        first_seen_at=r["first_seen_at"],
+                        last_seen_at=r["last_seen_at"],
+                        appearance_count=r["appearance_count"],
+                        platforms=[
+                            PlatformInfo(**p)
+                            for p in (
+                                json.loads(r["platforms"])
+                                if isinstance(r["platforms"], str)
+                                else r["platforms"]
+                            )
+                        ],
+                        created_at=r["created_at"],
+                        updated_at=r["updated_at"],
+                    )
+                    for r in all_hotspots
+                ]
+
+                return {
+                    "total": len(items),
+                    "items": items,
+                }
+
+    async def update_hotspot_status(
+        self, hotspot_id: int, new_status: HotspotStatus
+    ) -> Dict[str, Any]:
+        """
+        更新热词状态
+
+        Args:
+            hotspot_id: 热词ID
+            new_status: 新的状态
+
+        Returns:
+            包含 success, message, old_status, new_status 的字典
+        """
+        async with vector_session.pg_pool.acquire() as conn:
+            # 获取当前状态
+            current = await conn.fetchrow(
+                "SELECT id, keyword, status FROM hotspots WHERE id = $1", hotspot_id
+            )
+
+            if not current:
+                raise ValueError(f"热词 {hotspot_id} 不存在")
+
+            old_status = current["status"]
+
+            # 如果状态相同，直接返回
+            if old_status == new_status.value:
+                return {
+                    "success": True,
+                    "message": f"热词 '{current['keyword']}' 状态未改变",
+                    "old_status": old_status,
+                    "new_status": new_status.value,
+                }
+
+            # 更新状态
+            await conn.execute(
+                """
+                UPDATE hotspots
+                SET status = $1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $2
+                """,
+                new_status.value,
+                hotspot_id,
+            )
+
+            return {
+                "success": True,
+                "message": f"热词 '{current['keyword']}' 状态已从 {old_status} 更新为 {new_status.value}",
+                "old_status": old_status,
+                "new_status": new_status.value,
+            }
+
 
 # 全局热点服务实例
 hotspot_service = HotspotService()

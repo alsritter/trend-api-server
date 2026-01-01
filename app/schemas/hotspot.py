@@ -312,6 +312,7 @@ class ClusterInfo(BaseModel):
     cluster_name: str
     member_count: int
     keywords: List[str]
+    selected_hotspot_id: Optional[int] = Field(None, description="被选中用于验证的热词ID")
     created_at: datetime
     updated_at: datetime
     statuses: List[str] = Field(default_factory=list, description="聚簇中所有热点的状态列表")
@@ -404,3 +405,41 @@ class RemoveHotspotFromClusterResponse(BaseModel):
 
     success: bool
     message: str
+
+
+# ==================== 验证热词列表相关 ====================
+class ValidatedHotspotItem(BaseModel):
+    """验证热词列表项"""
+
+    id: int
+    keyword: str
+    cluster_id: Optional[int]
+    first_seen_at: datetime
+    last_seen_at: datetime
+    appearance_count: int
+    platforms: List[PlatformInfo]
+    created_at: datetime
+    updated_at: datetime
+
+
+class ListValidatedHotspotsResponse(BaseModel):
+    """列出待验证热词响应"""
+
+    success: bool
+    total: int
+    items: List[ValidatedHotspotItem]
+
+
+class UpdateHotspotStatusRequest(BaseModel):
+    """更新热词状态请求"""
+
+    status: HotspotStatus = Field(..., description="新的状态")
+
+
+class UpdateHotspotStatusResponse(BaseModel):
+    """更新热词状态响应"""
+
+    success: bool
+    message: str
+    old_status: str = Field(..., description="旧状态")
+    new_status: str = Field(..., description="新状态")

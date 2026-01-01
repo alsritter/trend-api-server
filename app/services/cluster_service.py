@@ -26,6 +26,7 @@ class ClusterService:
                     c.cluster_name,
                     c.member_count,
                     c.keywords,
+                    c.selected_hotspot_id,
                     c.created_at,
                     c.updated_at,
                     -- 聚合聚簇中所有热点的状态
@@ -37,7 +38,7 @@ class ClusterService:
                     COALESCE(MAX(h.updated_at), c.updated_at) as last_hotspot_update
                 FROM hotspot_clusters c
                 LEFT JOIN hotspots h ON h.cluster_id = c.id
-                GROUP BY c.id, c.cluster_name, c.member_count, c.keywords, c.created_at, c.updated_at
+                GROUP BY c.id, c.cluster_name, c.member_count, c.keywords, c.selected_hotspot_id, c.created_at, c.updated_at
                 ORDER BY COALESCE(MAX(h.updated_at), c.updated_at) DESC
                 """
             )
@@ -50,6 +51,7 @@ class ClusterService:
                     keywords=json.loads(r["keywords"])
                     if isinstance(r["keywords"], str)
                     else r["keywords"],
+                    selected_hotspot_id=r["selected_hotspot_id"],
                     created_at=r["created_at"],
                     updated_at=r["updated_at"],
                     statuses=r["statuses"] if isinstance(r["statuses"], list) else json.loads(r["statuses"]),
@@ -71,9 +73,25 @@ class ClusterService:
         async with vector_session.pg_pool.acquire() as conn:
             r = await conn.fetchrow(
                 """
-                SELECT id, cluster_name, member_count, keywords, created_at, updated_at
-                FROM hotspot_clusters
-                WHERE id = $1
+                SELECT
+                    c.id,
+                    c.cluster_name,
+                    c.member_count,
+                    c.keywords,
+                    c.selected_hotspot_id,
+                    c.created_at,
+                    c.updated_at,
+                    -- 聚合聚簇中所有热点的状态
+                    COALESCE(
+                        json_agg(DISTINCT h.status) FILTER (WHERE h.status IS NOT NULL),
+                        '[]'::json
+                    ) as statuses,
+                    -- 获取聚簇中最晚的更新时间
+                    COALESCE(MAX(h.updated_at), c.updated_at) as last_hotspot_update
+                FROM hotspot_clusters c
+                LEFT JOIN hotspots h ON h.cluster_id = c.id
+                WHERE c.id = $1
+                GROUP BY c.id, c.cluster_name, c.member_count, c.keywords, c.selected_hotspot_id, c.created_at, c.updated_at
                 """,
                 cluster_id,
             )
@@ -88,8 +106,11 @@ class ClusterService:
                 keywords=json.loads(r["keywords"])
                 if isinstance(r["keywords"], str)
                 else r["keywords"],
+                selected_hotspot_id=r["selected_hotspot_id"],
                 created_at=r["created_at"],
                 updated_at=r["updated_at"],
+                statuses=r["statuses"] if isinstance(r["statuses"], list) else json.loads(r["statuses"]),
+                last_hotspot_update=r["last_hotspot_update"],
             )
 
     async def create_cluster(
