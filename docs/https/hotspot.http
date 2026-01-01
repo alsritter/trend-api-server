@@ -400,3 +400,55 @@ DELETE {{baseUrl}}/api/v1/hotspots/1
 
 
 
+### 获取 validated 状态的热词列表（默认 24 小时）
+GET {{baseUrl}}/api/v1/hotspots/validated/list
+
+### 获取 validated 状态的热词列表（指定 48 小时）
+GET {{baseUrl}}/api/v1/hotspots/validated/list?hours=48
+
+### 获取 validated 状态的热词列表（指定 7 天，最大值）
+GET {{baseUrl}}/api/v1/hotspots/validated/list?hours=168
+
+### 更新热词状态 - 从 validated 到 crawling（需要替换 {hotspot_id}）
+PATCH {{baseUrl}}/api/v1/hotspots/1/status
+Content-Type: application/json
+
+{
+  "status": "crawling"
+}
+
+### 更新热词状态 - 从 crawled 到 analyzing（需要替换 {hotspot_id}）
+PATCH {{baseUrl}}/api/v1/hotspots/2/status
+Content-Type: application/json
+
+{
+  "status": "analyzing"
+}
+
+### 更新热词状态 - 从 analyzed 到 archived（需要替换 {hotspot_id}）
+PATCH {{baseUrl}}/api/v1/hotspots/3/status
+Content-Type: application/json
+
+{
+  "status": "archived"
+}
+
+### 更新热词状态 - 从 pending_validation 到 validated（需要替换 {hotspot_id}）
+PATCH {{baseUrl}}/api/v1/hotspots/4/status
+Content-Type: application/json
+
+{
+  "status": "validated"
+}
+
+### 更新热词状态 - 标记为 rejected（需要替换 {hotspot_id}）
+PATCH {{baseUrl}}/api/v1/hotspots/5/status
+Content-Type: application/json
+
+{
+  "status": "rejected"
+}
+
+
+### 剔除过时热词
+POST {{baseUrl}}/api/v1/hotspots/mark-outdated

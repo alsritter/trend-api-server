@@ -15,6 +15,7 @@ class HotspotStatus(str, Enum):
     ANALYZING = "analyzing"
     ANALYZED = "analyzed"
     ARCHIVED = "archived"
+    OUTDATED = "outdated"
 
 
 class Priority(str, Enum):
@@ -443,3 +444,12 @@ class UpdateHotspotStatusResponse(BaseModel):
     message: str
     old_status: str = Field(..., description="旧状态")
     new_status: str = Field(..., description="新状态")
+
+
+class MarkOutdatedHotspotsResponse(BaseModel):
+    """标记过时热词响应"""
+
+    success: bool
+    message: str
+    marked_count: int = Field(..., description="标记的热词数量")
+    hotspot_ids: List[int] = Field(default_factory=list, description="被标记的热词ID列表")

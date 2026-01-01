@@ -22,6 +22,7 @@ from app.schemas.hotspot import (
     ListValidatedHotspotsResponse,
     UpdateHotspotStatusRequest,
     UpdateHotspotStatusResponse,
+    MarkOutdatedHotspotsResponse,
     HotspotStatus,
     HotspotDetail,
 )
@@ -400,5 +401,47 @@ async def update_hotspot_status(hotspot_id: int, request: UpdateHotspotStatusReq
         logger.error(
             f"更新热词状态时发生错误 - hotspot_id: {hotspot_id}, "
             f"new_status: {request.status}, error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/mark-outdated", response_model=MarkOutdatedHotspotsResponse)
+async def mark_outdated_hotspots(
+    days: int = Query(
+        default=2,
+        ge=1,
+        le=30,
+        description="天数阈值，默认 2 天，最大 30 天",
+    ),
+):
+    """
+    标记过时的热词（超过指定天数未更新的热词）
+
+    功能：
+    - 自动识别超过指定天数未更新（last_seen_at）的热词
+    - 将这些热词的状态更新为 outdated
+    - 不会标记已经是 rejected、archived、outdated 状态的热词
+    - 返回被标记的热词ID列表
+
+    参数：
+    - days: 天数阈值，默认 2 天，最大 30 天
+
+    使用场景：
+    - 定时任务：每天运行一次，清理过时热词
+    - 手动清理：管理员手动触发清理
+    - 数据维护：保持热词库的时效性
+    """
+    try:
+        result = await hotspot_service.mark_outdated_hotspots(days=days)
+        return MarkOutdatedHotspotsResponse(
+            success=result["success"],
+            message=result["message"],
+            marked_count=result["marked_count"],
+            hotspot_ids=result["hotspot_ids"],
+        )
+    except Exception as e:
+        logger.error(
+            f"标记过时热词时发生错误 - days: {days}, "
+            f"error: {str(e)}, traceback: {traceback.format_exc()}"
         )
         raise HTTPException(status_code=500, detail=str(e))

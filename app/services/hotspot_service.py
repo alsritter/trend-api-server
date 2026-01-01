@@ -1280,6 +1280,65 @@ class HotspotService:
                 "new_status": new_status.value,
             }
 
+    async def mark_outdated_hotspots(self, days: int = 2) -> Dict[str, Any]:
+        """
+        标记过时的热词（超过指定天数未更新的热词）
+
+        Args:
+            days: 天数阈值，默认 2 天
+
+        Returns:
+            包含 success, message, marked_count, hotspot_ids 的字典
+        """
+        async with vector_session.pg_pool.acquire() as conn:
+            # 计算时间阈值
+            time_threshold = datetime.now() - timedelta(days=days)
+
+            # 查找需要标记为过时的热词
+            # 只标记那些不是 rejected、archived、outdated 状态的热词
+            outdated_hotspots = await conn.fetch(
+                """
+                SELECT id, keyword
+                FROM hotspots
+                WHERE last_seen_at < $1
+                    AND status NOT IN ($2, $3, $4)
+                """,
+                time_threshold,
+                HotspotStatus.REJECTED.value,
+                HotspotStatus.ARCHIVED.value,
+                HotspotStatus.OUTDATED.value,
+            )
+
+            if not outdated_hotspots:
+                return {
+                    "success": True,
+                    "message": f"没有发现超过 {days} 天未更新的热词",
+                    "marked_count": 0,
+                    "hotspot_ids": [],
+                }
+
+            # 提取热词ID列表
+            hotspot_ids = [r["id"] for r in outdated_hotspots]
+
+            # 批量更新状态为 outdated
+            await conn.execute(
+                """
+                UPDATE hotspots
+                SET status = $1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ANY($2::int[])
+                """,
+                HotspotStatus.OUTDATED.value,
+                hotspot_ids,
+            )
+
+            return {
+                "success": True,
+                "message": f"成功标记 {len(hotspot_ids)} 个过时热词",
+                "marked_count": len(hotspot_ids),
+                "hotspot_ids": hotspot_ids,
+            }
+
 
 # 全局热点服务实例
 hotspot_service = HotspotService()
