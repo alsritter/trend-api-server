@@ -129,6 +129,7 @@ async def create_task(request: TaskCreateRequest, conn=Depends(get_db)):
             crawler_type=request.crawler_type,
             keywords=request.keywords,
             config=task_config,
+            hotspot_id=request.hotspot_id,
         )
 
         return APIResponse(
@@ -227,6 +228,7 @@ async def stop_task(task_id: str):
 async def list_tasks(
     platform: Optional[str] = Query(None, description="平台名称"),
     status: Optional[str] = Query(None, description="任务状态"),
+    hotspot_id: Optional[int] = Query(None, description="热点ID"),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=100, description="每页数量"),
     conn=Depends(get_db),
@@ -234,13 +236,14 @@ async def list_tasks(
     """
     查询任务列表（分页）
 
-    支持按平台和状态筛选
+    支持按平台、状态和热点ID筛选
     """
     try:
         repo = TaskRepository(conn)
         tasks, total = await repo.list_tasks(
             platform=platform,
             status=status,
+            hotspot_id=hotspot_id,
             page=page,
             page_size=page_size,
         )

@@ -177,6 +177,72 @@ def update_task_status_sync(task_id: str, **kwargs):
     loop.run_until_complete(update_task_status_async(task_id, **kwargs))
 
 
+async def update_hotspot_status_async(hotspot_id: str):
+    """异步更新热点状态为 crawled"""
+    try:
+        # 动态导入，避免循环依赖
+        from app.db import vector_session
+        from app.schemas.hotspot import HotspotStatus
+
+        if vector_session.pg_pool is None:
+            logger.warning(
+                "PostgreSQL pool not initialized, skip hotspot status update"
+            )
+            return
+
+        # 将 hotspot_id 转换为整数
+        hotspot_id_int = int(hotspot_id)
+
+        async with vector_session.pg_pool.acquire() as conn:
+            # 检查当前该热点的所有任务是否都完成
+            from app.db import session as mysql_session
+
+            if mysql_session.db_pool is None:
+                logger.warning("MySQL pool not initialized, skip hotspot status check")
+                return
+
+            async with mysql_session.db_pool.acquire() as mysql_conn:
+                repo = TaskRepository(mysql_conn)
+                tasks = await repo.get_tasks_by_hotspot_id(hotspot_id_int)
+
+                # 检查是否所有任务都已完成
+                all_completed = all(
+                    task.status in ["SUCCESS", "FAILURE"] for task in tasks
+                )
+
+                if not all_completed:
+                    logger.info(
+                        f"Not all tasks completed for hotspot {hotspot_id_int}, "
+                        "status will be updated when all tasks finish"
+                    )
+                    return
+
+            # 所有任务都完成，更新热点状态为 crawled
+            await conn.execute(
+                """
+                UPDATE hotspots
+                SET status = $1,
+                    last_crawled_at = CURRENT_TIMESTAMP,
+                    crawl_count = crawl_count + 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $2
+                """,
+                HotspotStatus.CRAWLED.value,
+                hotspot_id_int,
+            )
+            logger.info(
+                f"Successfully updated hotspot {hotspot_id_int} status to crawled"
+            )
+    except Exception as e:
+        logger.error(f"Failed to update hotspot status: {e}")
+
+
+def update_hotspot_status_on_crawl_complete(hotspot_id: str):
+    """同步方式更新热点状态（在 Celery worker 中调用）"""
+    loop = get_event_loop()
+    loop.run_until_complete(update_hotspot_status_async(hotspot_id))
+
+
 class CrawlerTask(Task):
     """自定义 Celery Task 类，支持进度更新"""
 
@@ -204,6 +270,7 @@ def run_crawler(
     enable_comments: bool = True,
     enable_sub_comments: bool = False,
     max_comments_count: int = 20,
+    hotspot_id: str = "",  # 新增热点ID参数
     # 平台特定的指定ID/URL列表
     xhs_note_url_list: list = None,
     xhs_creator_url_list: list = None,
@@ -224,6 +291,37 @@ def run_crawler(
     """
     执行爬虫任务
 
+    本函数使用 bind=True 装饰器参数，使得 self 参数指向当前 Celery 任务实例。
+    通过 self.request.id 可以访问任务的唯一标识符（UUID），该 ID 由 Celery 在
+    调用 apply_async() 时自动生成。
+
+    任务 ID 的生成流程：
+    1. 外部调用 run_crawler.apply_async(kwargs={...})
+    2. Celery 生成 UUID 作为 task.id
+    3. 任务发送到消息队列（Redis/RabbitMQ）
+    4. Worker 拾取任务执行
+    5. 在任务函数内部，self.request.id 即为该 UUID
+
+    self.request 对象提供的属性：
+    - self.request.id: 任务 ID（UUID 字符串）
+    - self.request.args: 位置参数
+    - self.request.kwargs: 关键字参数
+    - self.request.retries: 重试次数
+
+    外部调用方式：
+    ```python
+    task = run_crawler.apply_async(kwargs={
+        "platform": "xhs",
+        "crawler_type": "search",
+        ...
+    })
+    task_id = task.id  # 获取任务 ID，用于后续状态查询
+    ```
+
+    参考文档：
+    - https://docs.celeryq.dev/en/stable/userguide/tasks.html
+    - https://docs.celeryq.dev/en/stable/reference/celery.app.task.html
+
     Args:
         platform: 平台名称 (xhs|dy|ks|bili|wb|tieba|zhihu)
         crawler_type: 爬虫类型 (search|detail|creator|homefeed)
@@ -234,6 +332,7 @@ def run_crawler(
         enable_comments: 是否爬取评论
         enable_sub_comments: 是否爬取二级评论
         max_comments_count: 每条内容最大评论数量
+        hotspot_id: 关联的热点ID（用于触发式爬虫）
         xhs_note_url_list: 小红书笔记URL列表
         xhs_creator_url_list: 小红书创作者URL列表
         weibo_specified_id_list: 微博指定帖子ID列表
@@ -251,7 +350,8 @@ def run_crawler(
         zhihu_specified_id_list: 知乎指定内容URL列表
     """
     logger.info(
-        f"Starting crawler task: platform={platform}, type={crawler_type}, keywords={keywords}"
+        f"Starting crawler task: platform={platform}, type={crawler_type}, "
+        f"keywords={keywords}, hotspot_id={hotspot_id}"
     )
 
     # 更新任务状态为 STARTED
@@ -294,6 +394,7 @@ def run_crawler(
         "max_comments_per_note": max_comments_count,
         "enable_checkpoint": enable_checkpoint,
         "checkpoint_id": checkpoint_id,
+        "hotspot_id": hotspot_id,  # 热点ID参数
     }
 
     # 添加平台特定的ID/URL列表参数
@@ -468,6 +569,16 @@ def run_crawler(
                 progress_percentage=100,
                 finished_at=datetime.now(),
             )
+
+            # 如果有 hotspot_id，更新热点状态为 crawled
+            if hotspot_id:
+                try:
+                    update_hotspot_status_on_crawl_complete(hotspot_id)
+                    logger.info(f"Updated hotspot {hotspot_id} status to crawled")
+                except Exception as e:
+                    logger.error(
+                        f"Failed to update hotspot status for {hotspot_id}: {str(e)}"
+                    )
 
             return result
         else:

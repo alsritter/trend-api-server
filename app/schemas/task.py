@@ -14,6 +14,7 @@ class TaskCreateRequest(BaseModel):
     enable_comments: bool = Field(True, description="是否爬取评论")
     enable_sub_comments: bool = Field(False, description="是否爬取二级评论")
     max_comments_count: int = Field(20, ge=1, le=500, description="每条内容最大评论数量")
+    hotspot_id: Optional[int] = Field(None, description="关联的热点ID（触发式爬虫）")
     
     # 平台特定的指定ID/URL列表
     xhs_note_url_list: Optional[List[str]] = Field(None, description="小红书笔记URL列表")
@@ -89,6 +90,7 @@ class TaskDB(BaseModel):
     result: Optional[str] = None  # JSON string
     error: Optional[str] = None
     config: Optional[str] = None  # JSON string
+    hotspot_id: Optional[int] = None  # 关联的热点ID
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     created_at: datetime

@@ -12,6 +12,7 @@ from app.schemas.hotspot import (
     PlatformInfo,
     BusinessReportContent,
     PushQueueItem,
+    CrawlTaskInfo,
 )
 import json
 
@@ -1337,6 +1338,245 @@ class HotspotService:
                 "message": f"成功标记 {len(hotspot_ids)} 个过时热词",
                 "marked_count": len(hotspot_ids),
                 "hotspot_ids": hotspot_ids,
+            }
+
+    async def trigger_crawl_for_hotspot(
+        self,
+        hotspot_id: int,
+        platforms: List[str],
+        crawler_type: str = "search",
+        max_notes_count: int = 50,
+        enable_comments: bool = True,
+        enable_sub_comments: bool = False,
+        max_comments_count: int = 20,
+    ) -> Dict[str, Any]:
+        """
+        为指定热点触发爬虫任务
+
+        Args:
+            hotspot_id: 热点ID
+            platforms: 平台列表 (如 ['xhs', 'dy', 'bili'])
+            crawler_type: 爬虫类型
+            max_notes_count: 每个平台最大爬取数量
+            enable_comments: 是否爬取评论
+            enable_sub_comments: 是否爬取二级评论
+            max_comments_count: 每条内容最大评论数量
+
+        Returns:
+            包含 success, task_ids, total_tasks 的字典
+        """
+        from app.celery_app.tasks.crawler_tasks import run_crawler
+
+        async with vector_session.pg_pool.acquire() as conn:
+            # 验证热点是否存在
+            hotspot = await conn.fetchrow(
+                "SELECT id, keyword, status FROM hotspots WHERE id = $1",
+                hotspot_id,
+            )
+
+            if not hotspot:
+                raise ValueError(f"热点 {hotspot_id} 不存在")
+
+            keyword = hotspot["keyword"]
+
+            # 创建爬虫任务列表
+            task_ids = []
+
+            # 为每个平台创建一个爬虫任务
+            for platform in platforms:
+                # 调用 Celery 任务
+                task = run_crawler.apply_async(
+                    kwargs={
+                        "platform": platform,
+                        "crawler_type": crawler_type,
+                        "keywords": keyword,  # 使用热点关键词
+                        "enable_checkpoint": True,
+                        "checkpoint_id": "",
+                        "max_notes_count": max_notes_count,
+                        "enable_comments": enable_comments,
+                        "enable_sub_comments": enable_sub_comments,
+                        "max_comments_count": max_comments_count,
+                        "hotspot_id": str(hotspot_id),  # 传递热点ID到爬虫
+                        # 平台特定参数留空，由爬虫自动搜索
+                        "xhs_note_url_list": None,
+                        "xhs_creator_url_list": None,
+                        "weibo_specified_id_list": None,
+                        "weibo_creator_id_list": None,
+                        "tieba_specified_id_list": None,
+                        "tieba_name_list": None,
+                        "tieba_creator_url_list": None,
+                        "bili_creator_id_list": None,
+                        "bili_specified_id_list": None,
+                        "dy_specified_id_list": None,
+                        "dy_creator_id_list": None,
+                        "ks_specified_id_list": None,
+                        "ks_creator_id_list": None,
+                        "zhihu_creator_url_list": None,
+                        "zhihu_specified_id_list": None,
+                    }
+                )
+
+                task_ids.append(task.id)
+
+                # 保存任务到数据库（需要通过 MySQL 连接）
+                # 这里需要调用 task_repo，但由于是异步的，我们在 API 层处理
+                # 所以这里返回任务ID，让 API 层保存
+
+            # 更新热点状态为 crawling
+            await conn.execute(
+                """
+                UPDATE hotspots
+                SET status = $1,
+                    crawl_started_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $2
+                """,
+                HotspotStatus.CRAWLING.value,
+                hotspot_id,
+            )
+
+            return {
+                "success": True,
+                "hotspot_id": hotspot_id,
+                "keyword": keyword,
+                "task_ids": task_ids,
+                "total_tasks": len(task_ids),
+                "platforms": platforms,
+            }
+
+    async def get_hotspot_crawl_status(
+        self, hotspot_id: int, mysql_conn
+    ) -> Dict[str, Any]:
+        """
+        获取热点的爬取状态
+
+        Args:
+            hotspot_id: 热点ID
+            mysql_conn: MySQL 数据库连接
+
+        Returns:
+            包含热��信息和所有相关爬虫任务的状态
+        """
+        from app.db.task_repo import TaskRepository
+
+        async with vector_session.pg_pool.acquire() as conn:
+            # 获取热点信息
+            hotspot = await conn.fetchrow(
+                "SELECT id, keyword, status FROM hotspots WHERE id = $1",
+                hotspot_id,
+            )
+
+            if not hotspot:
+                raise ValueError(f"热点 {hotspot_id} 不存在")
+
+        # 获取所有相关的爬虫任务
+        repo = TaskRepository(mysql_conn)
+        tasks = await repo.get_tasks_by_hotspot_id(hotspot_id)
+
+        # 统计任务状态
+        completed_tasks = sum(1 for t in tasks if t.status == "SUCCESS")
+        failed_tasks = sum(1 for t in tasks if t.status == "FAILURE")
+        pending_tasks = sum(
+            1 for t in tasks if t.status in ["PENDING", "STARTED", "PROGRESS"]
+        )
+
+        # 转换为返回格式
+        task_infos = [
+            CrawlTaskInfo(
+                task_id=t.task_id,
+                platform=t.platform,
+                status=t.status,
+                progress_current=t.progress_current,
+                progress_total=t.progress_total,
+                progress_percentage=t.progress_percentage,
+                error=t.error,
+                started_at=t.started_at,
+                finished_at=t.finished_at,
+                created_at=t.created_at,
+            )
+            for t in tasks
+        ]
+
+        return {
+            "success": True,
+            "hotspot_id": hotspot_id,
+            "hotspot_keyword": hotspot["keyword"],
+            "hotspot_status": HotspotStatus(hotspot["status"]),
+            "tasks": task_infos,
+            "total_tasks": len(tasks),
+            "completed_tasks": completed_tasks,
+            "failed_tasks": failed_tasks,
+            "pending_tasks": pending_tasks,
+        }
+
+    async def list_crawled_hotspots(
+        self, page: int = 1, page_size: int = 20
+    ) -> Dict[str, Any]:
+        """
+        获取所有已爬取状态的热点列表
+
+        Args:
+            page: 页码
+            page_size: 每页数量
+
+        Returns:
+            包含 total, page, page_size, items 的字典
+        """
+        async with vector_session.pg_pool.acquire() as conn:
+            # 查询总数
+            total = await conn.fetchval(
+                "SELECT COUNT(*) FROM hotspots WHERE status = $1",
+                HotspotStatus.CRAWLED.value,
+            )
+
+            # 查询数据
+            offset = (page - 1) * page_size
+            records = await conn.fetch(
+                """
+                SELECT
+                    id, keyword, cluster_id, status, last_seen_at,
+                    last_crawled_at, crawl_count, platforms,
+                    created_at, updated_at
+                FROM hotspots
+                WHERE status = $1
+                ORDER BY last_crawled_at DESC, updated_at DESC
+                LIMIT $2 OFFSET $3
+                """,
+                HotspotStatus.CRAWLED.value,
+                page_size,
+                offset,
+            )
+
+            from app.schemas.hotspot import CrawledHotspotItem
+
+            items = [
+                CrawledHotspotItem(
+                    id=r["id"],
+                    keyword=r["keyword"],
+                    cluster_id=r["cluster_id"],
+                    status=HotspotStatus(r["status"]),
+                    last_seen_at=r["last_seen_at"],
+                    last_crawled_at=r["last_crawled_at"],
+                    crawl_count=r["crawl_count"],
+                    platforms=[
+                        PlatformInfo(**p)
+                        for p in (
+                            json.loads(r["platforms"])
+                            if isinstance(r["platforms"], str)
+                            else r["platforms"]
+                        )
+                    ],
+                    created_at=r["created_at"],
+                    updated_at=r["updated_at"],
+                )
+                for r in records
+            ]
+
+            return {
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "items": items,
             }
 
 

@@ -453,3 +453,127 @@ class MarkOutdatedHotspotsResponse(BaseModel):
     message: str
     marked_count: int = Field(..., description="标记的热词数量")
     hotspot_ids: List[int] = Field(default_factory=list, description="被标记的热词ID列表")
+
+
+# ==================== 触发式爬虫相关 ====================
+class TriggerCrawlRequest(BaseModel):
+    """触发爬虫请求"""
+
+    hotspot_id: int = Field(..., description="热点ID")
+    platforms: List[str] = Field(
+        ...,
+        description="要爬取的平台列表",
+        min_length=1,
+        example=["xhs", "dy", "bili"]
+    )
+    crawler_type: str = Field(
+        default="search",
+        description="爬虫类型 (search|detail|creator|homefeed)",
+        pattern="^(search|detail|creator|homefeed)$"
+    )
+    max_notes_count: int = Field(
+        default=50,
+        ge=1,
+        le=1000,
+        description="每个平台最大爬取数量"
+    )
+    enable_comments: bool = Field(
+        default=True,
+        description="是否爬取评论"
+    )
+    enable_sub_comments: bool = Field(
+        default=False,
+        description="是否爬取二级评论"
+    )
+    max_comments_count: int = Field(
+        default=20,
+        ge=1,
+        le=500,
+        description="每条内容最大评论数量"
+    )
+
+
+class TriggerCrawlResponse(BaseModel):
+    """触发爬虫响应"""
+
+    success: bool
+    message: str
+    hotspot_id: int
+    task_ids: List[str] = Field(..., description="创建的爬虫任务ID列表")
+    total_tasks: int = Field(..., description="创建的任务总数")
+
+
+class CrawlTaskInfo(BaseModel):
+    """爬虫任务信息"""
+
+    task_id: str
+    platform: str
+    status: str
+    progress_current: int = 0
+    progress_total: int = 0
+    progress_percentage: int = 0
+    error: Optional[str] = None
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    created_at: datetime
+
+
+class GetHotspotCrawlStatusResponse(BaseModel):
+    """获取热点爬取状态响应"""
+
+    success: bool
+    hotspot_id: int
+    hotspot_keyword: str
+    hotspot_status: HotspotStatus
+    tasks: List[CrawlTaskInfo]
+    total_tasks: int
+    completed_tasks: int
+    failed_tasks: int
+    pending_tasks: int
+
+
+class CrawledHotspotItem(BaseModel):
+    """已爬取热点列表项"""
+
+    id: int
+    keyword: str
+    cluster_id: Optional[int]
+    status: HotspotStatus
+    last_seen_at: datetime
+    last_crawled_at: Optional[datetime]
+    crawl_count: int
+    platforms: List[PlatformInfo]
+    created_at: datetime
+    updated_at: datetime
+
+
+class ListCrawledHotspotsResponse(BaseModel):
+    """列出已爬取热点响应"""
+
+    success: bool
+    total: int
+    page: int
+    page_size: int
+    items: List[CrawledHotspotItem]
+
+
+# ==================== 热点内容关联相关 ====================
+class PlatformContents(BaseModel):
+    """平台内容详情"""
+
+    platform: str
+    contents: List[dict] = Field(default_factory=list, description="内容列表")
+    comments: List[dict] = Field(default_factory=list, description="评论列表")
+    total_contents: int
+    total_comments: int
+
+
+class GetHotspotContentsResponse(BaseModel):
+    """获取热点关联内容响应"""
+
+    success: bool
+    hotspot_id: int
+    hotspot_keyword: str
+    platforms: List[PlatformContents] = Field(..., description="各平台的完整内容和评论")
+    total_contents: int = Field(..., description="所有平台的内容总数")
+    total_comments: int = Field(..., description="所有平台的评论总数")

@@ -115,16 +115,13 @@ def merge_task_config(task_params: Dict) -> Dict[str, str]:
         "max_comments_per_note": "PER_NOTE_MAX_COMMENTS_COUNT",
         "enable_checkpoint": "ENABLE_CHECKPOINT",
         "checkpoint_id": "SPECIFIED_CHECKPOINT_ID",
+        "hotspot_id": "HOTSPOT_ID",  # 热点ID参数映射
     }
 
     # 将任务参数映射到环境变量
     for task_key, env_key in param_mapping.items():
         if task_key in task_params:
             env_config[env_key] = str(task_params[task_key])
-
-    # 处理平台特定的指定ID/URL列表
-    # 使用 || 分隔符来连接多个URL（因为URL中可能包含逗号）
-    platform = task_params.get("platform", "")
 
     # 小红书笔记URL列表
     if "xhs_note_url_list" in task_params and task_params["xhs_note_url_list"]:

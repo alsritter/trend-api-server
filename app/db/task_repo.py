@@ -2,6 +2,7 @@
 任务仓储层
 提供任务的数据库 CRUD 操作
 """
+
 import json
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -23,18 +24,28 @@ class TaskRepository:
         crawler_type: str,
         keywords: Optional[str] = None,
         config: Optional[Dict[str, Any]] = None,
+        hotspot_id: Optional[int] = None,
     ) -> TaskDB:
         """创建新任务"""
         config_json = json.dumps(config, ensure_ascii=False) if config else None
 
         async with self.conn.cursor(aiomysql.DictCursor) as cursor:
             sql = """
-            INSERT INTO crawler_tasks 
-            (task_id, platform, crawler_type, keywords, status, config, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, NOW(), NOW())
+            INSERT INTO crawler_tasks
+            (task_id, platform, crawler_type, keywords, status, config, hotspot_id, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
             """
             await cursor.execute(
-                sql, (task_id, platform, crawler_type, keywords, "PENDING", config_json)
+                sql,
+                (
+                    task_id,
+                    platform,
+                    crawler_type,
+                    keywords,
+                    "PENDING",
+                    config_json,
+                    hotspot_id,
+                ),
             )
             await self.conn.commit()
 
@@ -107,6 +118,7 @@ class TaskRepository:
         self,
         platform: Optional[str] = None,
         status: Optional[str] = None,
+        hotspot_id: Optional[int] = None,
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[List[TaskDB], int]:
@@ -127,6 +139,10 @@ class TaskRepository:
             conditions.append("status = %s")
             params.append(status)
 
+        if hotspot_id is not None:
+            conditions.append("hotspot_id = %s")
+            params.append(hotspot_id)
+
         where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
         # 查询总数
@@ -139,7 +155,7 @@ class TaskRepository:
         # 查询分页数据
         offset = (page - 1) * page_size
         list_sql = f"""
-        SELECT * FROM crawler_tasks 
+        SELECT * FROM crawler_tasks
         {where_clause}
         ORDER BY created_at DESC
         LIMIT %s OFFSET %s
@@ -160,3 +176,15 @@ class TaskRepository:
             await cursor.execute(sql, (task_id,))
             await self.conn.commit()
             return cursor.rowcount > 0
+
+    async def get_tasks_by_hotspot_id(self, hotspot_id: int) -> List[TaskDB]:
+        """根据热点ID获取所有关联的任务"""
+        async with self.conn.cursor(aiomysql.DictCursor) as cursor:
+            sql = """
+            SELECT * FROM crawler_tasks
+            WHERE hotspot_id = %s
+            ORDER BY created_at DESC
+            """
+            await cursor.execute(sql, (hotspot_id,))
+            rows = await cursor.fetchall()
+            return [TaskDB(**row) for row in rows]

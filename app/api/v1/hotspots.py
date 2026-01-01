@@ -1,8 +1,11 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional
 import logging
 import traceback
+import aiomysql
 from app.services.hotspot_service import hotspot_service
+from app.db.session import get_db
+from app.db.task_repo import TaskRepository
 from app.schemas.hotspot import (
     # 请求/响应模型
     AddHotspotKeywordRequest,
@@ -23,6 +26,11 @@ from app.schemas.hotspot import (
     UpdateHotspotStatusRequest,
     UpdateHotspotStatusResponse,
     MarkOutdatedHotspotsResponse,
+    TriggerCrawlRequest,
+    TriggerCrawlResponse,
+    ListCrawledHotspotsResponse,
+    GetHotspotContentsResponse,
+    PlatformContents,
     HotspotStatus,
     HotspotDetail,
 )
@@ -31,6 +39,39 @@ from app.schemas.hotspot import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# 平台内容表映射（从 contents.py 复用）
+PLATFORM_CONTENT_TABLES = {
+    "xhs": "xhs_note",
+    "dy": "douyin_aweme",
+    "ks": "kuaishou_video",
+    "bili": "bilibili_video",
+    "wb": "weibo_note",
+    "tieba": "tieba_note",
+    "zhihu": "zhihu_content",
+}
+
+# 平台评论表映射
+PLATFORM_COMMENT_TABLES = {
+    "xhs": "xhs_note_comment",
+    "dy": "douyin_aweme_comment",
+    "ks": "kuaishou_video_comment",
+    "bili": "bilibili_video_comment",
+    "wb": "weibo_note_comment",
+    "tieba": "tieba_comment",
+    "zhihu": "zhihu_comment",
+}
+
+# 平台内容ID字段映射
+PLATFORM_CONTENT_ID_FIELDS = {
+    "dy": "aweme_id",
+    "bili": "video_id",
+    "ks": "video_id",
+    "zhihu": "content_id",
+    "xhs": "note_id",
+    "wb": "note_id",
+    "tieba": "note_id",
+}
 
 
 # ==================== 核心业务接口 ====================
@@ -442,6 +483,260 @@ async def mark_outdated_hotspots(
     except Exception as e:
         logger.error(
             f"标记过时热词时发生错误 - days: {days}, "
+            f"error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/trigger-crawl", response_model=TriggerCrawlResponse)
+async def trigger_crawl(request: TriggerCrawlRequest, conn=Depends(get_db)):
+    """
+    为指定热点触发爬虫任务
+
+    功能：
+    - 为热点在指定的平台上创建爬虫任务
+    - 每个平台创建一个独立的爬虫任务
+    - 自动将热点状态更新为 crawling
+    - 任务完成后可以通过回调更新状态
+
+    参数：
+    - hotspot_id: 热点ID
+    - platforms: 平台列表 (如 ['xhs', 'dy', 'bili'])
+    - crawler_type: 爬虫类型 (search|detail|creator|homefeed)，默认 search
+    - max_notes_count: 每个平台最大爬取数量，默认 50
+    - enable_comments: 是否爬取评论，默认 True
+    - enable_sub_comments: 是否爬取二级评论，默认 False
+    - max_comments_count: 每条内容最大评论数量，默认 20
+
+    使用场景：
+    - 热点验证通过后，触发爬虫采集相关内容
+    - 定时任务：定期为热点更新数据
+    - 手动触发：管理员手动触发爬取
+    """
+    try:
+        # 调用服务层创建爬虫任务
+        result = await hotspot_service.trigger_crawl_for_hotspot(
+            hotspot_id=request.hotspot_id,
+            platforms=request.platforms,
+            crawler_type=request.crawler_type,
+            max_notes_count=request.max_notes_count,
+            enable_comments=request.enable_comments,
+            enable_sub_comments=request.enable_sub_comments,
+            max_comments_count=request.max_comments_count,
+        )
+
+        # 保存任务到数据库
+        repo = TaskRepository(conn)
+        task_config = {
+            "max_notes_count": request.max_notes_count,
+            "enable_comments": request.enable_comments,
+            "enable_sub_comments": request.enable_sub_comments,
+            "max_comments_count": request.max_comments_count,
+        }
+
+        for i, task_id in enumerate(result["task_ids"]):
+            platform = result["platforms"][i]
+            await repo.create_task(
+                task_id=task_id,
+                platform=platform,
+                crawler_type=request.crawler_type,
+                keywords=result["keyword"],
+                config=task_config,
+                hotspot_id=request.hotspot_id,
+            )
+
+        return TriggerCrawlResponse(
+            success=True,
+            message=f"成功为热点 '{result['keyword']}' 创建 {result['total_tasks']} 个爬虫任务",
+            hotspot_id=request.hotspot_id,
+            task_ids=result["task_ids"],
+            total_tasks=result["total_tasks"],
+        )
+    except ValueError as e:
+        logger.error(
+            f"触发爬虫失败(未找到) - hotspot_id: {request.hotspot_id}, "
+            f"platforms: {request.platforms}, error: {str(e)}"
+        )
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(
+            f"触发爬虫时发生错误 - hotspot_id: {request.hotspot_id}, "
+            f"platforms: {request.platforms}, error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/crawled/list", response_model=ListCrawledHotspotsResponse)
+async def list_crawled_hotspots(
+    page: int = Query(default=1, ge=1, description="页码"),
+    page_size: int = Query(default=20, ge=1, le=100, description="每页数量"),
+):
+    """
+    获取已爬取状态的热点列表
+
+    功能：
+    - 查询所有状态为 crawled 的热点
+    - 支持分页
+    - 返回热点基本信息
+
+    参数：
+    - page: 页码
+    - page_size: 每页数量
+
+    返回：
+    - 热点列表（ID、关键词、状态等）
+    - 分页信息
+    """
+    try:
+        result = await hotspot_service.list_crawled_hotspots(
+            page=page, page_size=page_size
+        )
+        return ListCrawledHotspotsResponse(
+            success=True,
+            total=result["total"],
+            page=result["page"],
+            page_size=result["page_size"],
+            items=result["items"],
+        )
+    except Exception as e:
+        logger.error(
+            f"获取已爬取热点列表时发生错误 - page: {page}, page_size: {page_size}, "
+            f"error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{hotspot_id}/contents", response_model=GetHotspotContentsResponse)
+async def get_hotspot_contents(
+    hotspot_id: int, conn: aiomysql.Connection = Depends(get_db)
+):
+    """
+    获取热点关联的所有内容和评论
+
+    功能：
+    - 查询热点对应关键词在各平台爬取的所有内容
+    - 返回每个平台的完整内容列表和评论列表
+    - 按平台分组展示数据
+
+    参数：
+    - hotspot_id: 热点ID
+
+    返回：
+    - 热点基本信息（ID、关键词）
+    - 各平台的内容和评论列表
+    - 统计信息（总内容数、总评论数）
+
+    说明：
+    - 通过 hotspot_id 关联到爬虫任务（crawler_tasks 表）
+    - 爬虫任务使用热词的 keyword 字段作为搜索关键词
+    - 根据关键词在各平台的内容表中查询匹配的内容
+    - 再根据内容ID查询对应的评论
+    """
+    try:
+        # 1. 获取热点信息
+        hotspot = await hotspot_service.get_hotspot_by_id(hotspot_id)
+        if not hotspot:
+            raise HTTPException(status_code=404, detail=f"热点 {hotspot_id} 不存在")
+
+        keyword = hotspot.keyword
+
+        # 2. 获取该热点的所有爬虫任务
+        repo = TaskRepository(conn)
+        tasks = await repo.get_tasks_by_hotspot_id(hotspot_id)
+
+        if not tasks:
+            # 没有爬虫任务，返回空结果
+            return GetHotspotContentsResponse(
+                success=True,
+                hotspot_id=hotspot_id,
+                hotspot_keyword=keyword,
+                platforms=[],
+                total_contents=0,
+                total_comments=0,
+            )
+
+        # 3. 按平台分组获取内容和评论
+        platforms_data = []
+        total_contents_count = 0
+        total_comments_count = 0
+
+        # 获取所有平台（去重）
+        platforms_set = {task.platform for task in tasks if task.status == "COMPLETED"}
+
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            for platform in platforms_set:
+                if platform not in PLATFORM_CONTENT_TABLES:
+                    logger.warning(f"不支持的平台: {platform}")
+                    continue
+
+                content_table = PLATFORM_CONTENT_TABLES[platform]
+                comment_table = PLATFORM_COMMENT_TABLES[platform]
+                content_id_field = PLATFORM_CONTENT_ID_FIELDS.get(platform, "note_id")
+
+                # 查询该平台下匹配关键词的所有内容
+                # 使用 LIKE 匹配标题、描述或内容字段
+                content_sql = f"""
+                    SELECT * FROM {content_table}
+                    WHERE (title LIKE %s OR `desc` LIKE %s OR content LIKE %s)
+                    ORDER BY add_ts DESC
+                """
+                keyword_pattern = f"%{keyword}%"
+                await cursor.execute(
+                    content_sql, (keyword_pattern, keyword_pattern, keyword_pattern)
+                )
+                contents = await cursor.fetchall()
+
+                # 查询这些内容的所有评论
+                comments = []
+                if contents:
+                    content_ids = [
+                        c.get(content_id_field)
+                        for c in contents
+                        if c.get(content_id_field)
+                    ]
+
+                    if content_ids:
+                        # 构建 IN 查询
+                        placeholders = ",".join(["%s"] * len(content_ids))
+                        comment_sql = f"""
+                            SELECT * FROM {comment_table}
+                            WHERE {content_id_field} IN ({placeholders})
+                            ORDER BY add_ts DESC
+                        """
+                        await cursor.execute(comment_sql, content_ids)
+                        comments = await cursor.fetchall()
+
+                # 统计
+                platform_contents_count = len(contents)
+                platform_comments_count = len(comments)
+                total_contents_count += platform_contents_count
+                total_comments_count += platform_comments_count
+
+                # 添加到结果
+                platforms_data.append(
+                    PlatformContents(
+                        platform=platform,
+                        contents=contents,
+                        comments=comments,
+                        total_contents=platform_contents_count,
+                        total_comments=platform_comments_count,
+                    )
+                )
+
+        return GetHotspotContentsResponse(
+            success=True,
+            hotspot_id=hotspot_id,
+            hotspot_keyword=keyword,
+            platforms=platforms_data,
+            total_contents=total_contents_count,
+            total_comments=total_comments_count,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            f"获取热点内容时发生错误 - hotspot_id: {hotspot_id}, "
             f"error: {str(e)}, traceback: {traceback.format_exc()}"
         )
         raise HTTPException(status_code=500, detail=str(e))
