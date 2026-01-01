@@ -15,10 +15,10 @@ POST {{base_url}}{{api_prefix}}/hotspots/trigger-crawl
 Content-Type: application/json
 
 {
-  "hotspot_id": 1,
-  "platforms": ["xhs"],
+  "hotspot_id": 856,
+  "platforms": ["bili"],
   "crawler_type": "search",
-  "max_notes_count": 50,
+  "max_notes_count": 3,
   "enable_comments": true,
   "enable_sub_comments": false,
   "max_comments_count": 20
