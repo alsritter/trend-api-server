@@ -1,8 +1,8 @@
 import { Modal, Checkbox, message, Space } from "antd";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { hotspotsApi } from "@/api/hotspots";
-import type { HotspotDetail } from "@/types/api";
+import { clustersApi } from "@/api/clusters";
+import type { HotspotDetail, SplitClusterResponse } from "@/types/api";
 
 interface SplitClusterModalProps {
   visible: boolean;
@@ -24,8 +24,8 @@ export function SplitClusterModal({
 
   const splitMutation = useMutation({
     mutationFn: ({ clusterId, hotspotIds }: { clusterId: number; hotspotIds: number[] }) =>
-      hotspotsApi.splitCluster(clusterId, { cluster_id: clusterId, hotspot_ids: hotspotIds }),
-    onSuccess: (data) => {
+      clustersApi.split(clusterId, { hotspot_ids: hotspotIds }),
+    onSuccess: (data: SplitClusterResponse) => {
       message.success(data.message);
       queryClient.invalidateQueries({ queryKey: ["clusters"] });
       queryClient.invalidateQueries({ queryKey: ["hotspots"] });

@@ -105,6 +105,7 @@ async def init_db():
         maxsize=10,
         minsize=1,
         charset="utf8mb4",
+        init_command="SET time_zone='+08:00'",  # 设置 MySQL 连接时区为东8区
     )
     print(
         f"Database connection pool initialized: {settings.RELATION_DB_HOST}:{settings.RELATION_DB_PORT}/{settings.RELATION_DB_NAME}"

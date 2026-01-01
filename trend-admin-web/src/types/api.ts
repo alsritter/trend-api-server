@@ -497,6 +497,8 @@ export interface ListHotspotsRequest {
   page_size?: number;
   status?: HotspotStatus;
   keyword?: string;
+  similarity_search?: string;
+  similarity_threshold?: number;
 }
 
 export interface ListHotspotsResponse {
@@ -543,6 +545,8 @@ export interface ClusterInfo {
   keywords: string[];
   created_at: string;
   updated_at: string;
+  statuses: string[];
+  last_hotspot_update: string;
 }
 
 // 列出聚簇响应
@@ -550,6 +554,19 @@ export interface ListClustersResponse {
   success: boolean;
   items: ClusterInfo[];
   count: number;
+}
+
+// 创建聚簇请求
+export interface CreateClusterRequest {
+  cluster_name: string;
+  hotspot_ids?: number[];
+}
+
+// 创建聚簇响应
+export interface CreateClusterResponse {
+  success: boolean;
+  cluster_id: number;
+  message: string;
 }
 
 // 合并聚簇请求
@@ -567,7 +584,6 @@ export interface MergeClustersResponse {
 
 // 拆分聚簇请求
 export interface SplitClusterRequest {
-  cluster_id: number;
   hotspot_ids: number[];
   new_cluster_name?: string;
 }

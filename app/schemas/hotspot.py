@@ -314,6 +314,8 @@ class ClusterInfo(BaseModel):
     keywords: List[str]
     created_at: datetime
     updated_at: datetime
+    statuses: List[str] = Field(default_factory=list, description="聚簇中所有热点的状态列表")
+    last_hotspot_update: datetime = Field(..., description="聚簇中热点的最后更新时间")
 
 
 class ListClustersResponse(BaseModel):
@@ -322,6 +324,21 @@ class ListClustersResponse(BaseModel):
     success: bool
     items: List[ClusterInfo]
     count: int
+
+
+class CreateClusterRequest(BaseModel):
+    """创建聚簇请求"""
+
+    cluster_name: str = Field(..., description="聚簇名称")
+    hotspot_ids: Optional[List[int]] = Field(None, description="初始热点ID列表（可选）")
+
+
+class CreateClusterResponse(BaseModel):
+    """创建聚簇响应"""
+
+    success: bool
+    cluster_id: int = Field(..., description="新创建的簇ID")
+    message: str
 
 
 class MergeClustersRequest(BaseModel):
@@ -344,7 +361,6 @@ class MergeClustersResponse(BaseModel):
 class SplitClusterRequest(BaseModel):
     """拆分聚簇请求"""
 
-    cluster_id: int = Field(..., description="要拆分的簇ID")
     hotspot_ids: List[int] = Field(..., min_length=1, description="要移出的热点ID列表")
     new_cluster_name: Optional[str] = Field(None, description="新簇名称（可选，默认使用第一个热点的名称）")
 

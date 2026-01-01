@@ -1,7 +1,7 @@
 import { Modal, Table, Tag, Space, Spin, Alert } from "antd";
 import { ClusterOutlined } from "@ant-design/icons";
 import { useQuery } from "@tanstack/react-query";
-import { hotspotsApi } from "@/api/hotspots";
+import { clustersApi } from "@/api/clusters";
 import { STATUS_MAP } from "./HotspotTableColumns";
 import type { HotspotDetail, GetClusterHotspotsResponse } from "@/types/api";
 import type { ColumnsType } from "antd/es/table";
@@ -19,7 +19,7 @@ export const ClusterHotspotsModal = ({
 }: ClusterHotspotsModalProps) => {
   const { data, isLoading, error } = useQuery<GetClusterHotspotsResponse>({
     queryKey: ["cluster-hotspots", clusterId],
-    queryFn: () => hotspotsApi.getClusterHotspots(clusterId!),
+    queryFn: () => clustersApi.getHotspots(clusterId!),
     enabled: visible && clusterId !== null
   });
 

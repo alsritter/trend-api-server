@@ -12,21 +12,9 @@ import type {
   ListHotspotsRequest,
   ListHotspotsResponse,
   DeleteHotspotResponse,
-  GetClusterHotspotsResponse,
   LinkHotspotRequest,
   LinkHotspotResponse,
   HotspotDetail,
-  // 聚簇管理
-  ListClustersResponse,
-  MergeClustersRequest,
-  MergeClustersResponse,
-  SplitClusterRequest,
-  SplitClusterResponse,
-  UpdateClusterRequest,
-  UpdateClusterResponse,
-  DeleteClusterResponse,
-  RemoveHotspotFromClusterRequest,
-  RemoveHotspotFromClusterResponse,
 } from '@/types/api';
 
 const BASE_PATH = '/api/v1/hotspots';
@@ -88,13 +76,6 @@ export const hotspotsApi = {
   },
 
   /**
-   * 获取同簇的所有热点
-   */
-  getClusterHotspots: async (clusterId: number): Promise<GetClusterHotspotsResponse> => {
-    return apiClient.get(`${BASE_PATH}/cluster/${clusterId}/hotspots`);
-  },
-
-  /**
    * 删除热点
    */
   delete: async (hotspotId: number): Promise<DeleteHotspotResponse> => {
@@ -106,52 +87,5 @@ export const hotspotsApi = {
    */
   link: async (data: LinkHotspotRequest): Promise<LinkHotspotResponse> => {
     return apiClient.post(`${BASE_PATH}/link`, data);
-  },
-
-  // ==================== 聚簇管理接口 ====================
-
-  /**
-   * 列出所有聚簇
-   */
-  listClusters: async (): Promise<ListClustersResponse> => {
-    return apiClient.get(`${BASE_PATH}/clusters`);
-  },
-
-  /**
-   * 合并多个聚簇
-   */
-  mergeClusters: async (data: MergeClustersRequest): Promise<MergeClustersResponse> => {
-    return apiClient.post(`${BASE_PATH}/clusters/merge`, data);
-  },
-
-  /**
-   * 拆分聚簇
-   */
-  splitCluster: async (clusterId: number, data: SplitClusterRequest): Promise<SplitClusterResponse> => {
-    return apiClient.post(`${BASE_PATH}/clusters/${clusterId}/split`, data);
-  },
-
-  /**
-   * 更新聚簇信息
-   */
-  updateCluster: async (clusterId: number, data: UpdateClusterRequest): Promise<UpdateClusterResponse> => {
-    return apiClient.patch(`${BASE_PATH}/clusters/${clusterId}`, data);
-  },
-
-  /**
-   * 删除聚簇
-   */
-  deleteCluster: async (clusterId: number): Promise<DeleteClusterResponse> => {
-    return apiClient.delete(`${BASE_PATH}/clusters/${clusterId}`);
-  },
-
-  /**
-   * 从聚簇中移除单个热点
-   */
-  removeHotspotFromCluster: async (
-    clusterId: number,
-    data: RemoveHotspotFromClusterRequest
-  ): Promise<RemoveHotspotFromClusterResponse> => {
-    return apiClient.post(`${BASE_PATH}/clusters/${clusterId}/remove-hotspot`, data);
   },
 };

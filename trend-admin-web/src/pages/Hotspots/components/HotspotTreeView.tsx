@@ -11,6 +11,7 @@ import {
 } from "@ant-design/icons";
 import { useState, useMemo, useEffect, Key } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { clustersApi } from "@/api/clusters";
 import { hotspotsApi } from "@/api/hotspots";
 import type { HotspotDetail, ClusterInfo, HotspotStatus } from "@/types/api";
 import { SplitClusterModal } from "./SplitClusterModal";
@@ -48,7 +49,7 @@ export function HotspotTreeView({
   // 获取所有聚簇
   const { data: clustersData, isLoading: clustersLoading } = useQuery({
     queryKey: ["clusters"],
-    queryFn: () => hotspotsApi.listClusters(),
+    queryFn: () => clustersApi.list(),
   });
 
   // 获取所有热点
@@ -60,7 +61,7 @@ export function HotspotTreeView({
 
   // 删除聚簇
   const deleteClusterMutation = useMutation({
-    mutationFn: hotspotsApi.deleteCluster,
+    mutationFn: clustersApi.delete,
     onSuccess: () => {
       message.success("聚簇已删除");
       queryClient.invalidateQueries({ queryKey: ["clusters"] });
@@ -74,7 +75,7 @@ export function HotspotTreeView({
 
   // 合并聚簇
   const mergeClustersMutation = useMutation({
-    mutationFn: hotspotsApi.mergeClusters,
+    mutationFn: clustersApi.merge,
     onSuccess: () => {
       message.success("聚簇已合并");
       queryClient.invalidateQueries({ queryKey: ["clusters"] });
@@ -91,7 +92,7 @@ export function HotspotTreeView({
   // 更新聚簇名称
   const updateClusterMutation = useMutation({
     mutationFn: ({ clusterId, name }: { clusterId: number; name: string }) =>
-      hotspotsApi.updateCluster(clusterId, { cluster_name: name }),
+      clustersApi.update(clusterId, { cluster_name: name }),
     onSuccess: () => {
       message.success("聚簇名称已更新");
       queryClient.invalidateQueries({ queryKey: ["clusters"] });
