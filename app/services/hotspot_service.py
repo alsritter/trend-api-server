@@ -28,6 +28,59 @@ class HotspotService:
         """初始化热点服务"""
         pass
 
+    async def _validate_hotspot_status(self, conn, hotspot_record: dict) -> None:
+        """
+        验证并更新热词状态（从 pending_validation 到 validated）
+
+        Args:
+            conn: 数据库连接
+            hotspot_record: 热词记录（包含 id, status, last_seen_at, cluster_id）
+        """
+        # 只处理 pending_validation 状态的热词
+        if hotspot_record["status"] != HotspotStatus.PENDING_VALIDATION.value:
+            return
+
+        # 计算时间差
+        now = datetime.now()
+        last_seen_at = hotspot_record["last_seen_at"]
+        time_diff = now - last_seen_at
+
+        # 检查是否在 3 小时到 3 天之间
+        three_hours = timedelta(hours=3)
+        three_days = timedelta(days=3)
+
+        if three_hours <= time_diff <= three_days:
+            cluster_id = hotspot_record["cluster_id"]
+
+            if cluster_id:
+                # 如果有 cluster_id，更新该 cluster 下的所有热词
+                await conn.execute(
+                    """
+                    UPDATE hotspots
+                    SET status = $1,
+                        last_seen_at = CURRENT_TIMESTAMP,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE cluster_id = $2
+                        AND status = $3
+                    """,
+                    HotspotStatus.VALIDATED.value,
+                    cluster_id,
+                    HotspotStatus.PENDING_VALIDATION.value,
+                )
+            else:
+                # 如果没有 cluster_id，只更新当前热词
+                await conn.execute(
+                    """
+                    UPDATE hotspots
+                    SET status = $1,
+                        last_seen_at = CURRENT_TIMESTAMP,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = $2
+                    """,
+                    HotspotStatus.VALIDATED.value,
+                    hotspot_record["id"],
+                )
+
     def _parse_viewnum(self, viewnum_str: str) -> int:
         """
         解析热度值（将 "541.2万" 这样的字符串转换为数字）
@@ -289,6 +342,23 @@ class HotspotService:
         2. 时间窗口内的相似匹配（最近7天）
         3. 向量相似度匹配
 
+        --- 热词状态说明 ---
+
+        'pending_validation',    -- 等待持续性验证（首次出现）
+        'validated',             -- 已验证有持续性（3小时后二次出现）
+        'rejected',              -- 已过滤（无商业价值）
+        'crawling',              -- 爬虫进行中
+        'crawled',               -- 爬取完成，等待分析
+        'analyzing',             -- 商业分析中
+        'analyzed',              -- 分析完成
+        'archived'               -- 已归档
+
+        这里的额外逻辑，需要检查完全匹配或者高相似度 last_seen_at 和 status 状态，
+        如果 status 状态为 pending_validation，且 last_seen_at 大于 3 小时（低于 3 天）的
+        热词，则更新这个热词的 last_seen_at 以及 status 为 validated
+
+        注意：如果这个热词的 cluster_id 不为空，则需要将该 cluster 下的所有热词都更新为 validated
+
         Args:
             keyword: 热词名称
 
@@ -309,6 +379,9 @@ class HotspotService:
             )
 
             if exact_match:
+                # 检查是否需要验证状态更新
+                await self._validate_hotspot_status(conn, exact_match)
+
                 return {
                     "exists": True,
                     "action": "skip",
@@ -390,6 +463,20 @@ class HotspotService:
 
             elif max_similarity >= self.HIGH_SIMILARITY_THRESHOLD:
                 # 高相似度，更新时间或状态
+                hotspot_record = await conn.fetchrow(
+                    """
+                    SELECT id, keyword, normalized_keyword, status,
+                           first_seen_at, last_seen_at, appearance_count, cluster_id
+                    FROM hotspots
+                    WHERE id = $1
+                    """,
+                    similar_hotspots[0].id,
+                )
+
+                # 检查是否需要验证状态更新
+                await self._validate_hotspot_status(conn, hotspot_record)
+
+                # 更新时间和出现次数
                 await conn.execute(
                     """
                     UPDATE hotspots
@@ -618,7 +705,9 @@ class HotspotService:
                 # 生成搜索词的向量
                 from app.services.vector_service import vector_service
 
-                search_embedding = await vector_service.generate_embedding(similarity_search)
+                search_embedding = await vector_service.generate_embedding(
+                    similarity_search
+                )
 
                 # 构建查询条件
                 conditions = []
