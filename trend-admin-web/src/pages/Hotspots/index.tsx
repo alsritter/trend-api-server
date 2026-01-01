@@ -1,5 +1,31 @@
-import { Card, Tree, Table, Space, Button, message, Drawer, Descriptions, Tag, Modal, Input, Select, Checkbox, DatePicker, Dropdown } from "antd";
-import { ReloadOutlined, DeleteOutlined, EditOutlined, MergeCellsOutlined, SwapOutlined, PlusOutlined, FilterOutlined } from "@ant-design/icons";
+import {
+  Card,
+  Tree,
+  Table,
+  Space,
+  Button,
+  message,
+  Drawer,
+  Typography,
+  Descriptions,
+  Tag,
+  Modal,
+  Input,
+  Select,
+  Checkbox,
+  DatePicker,
+  Dropdown
+} from "antd";
+const { Text } = Typography;
+import {
+  ReloadOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  MergeCellsOutlined,
+  SwapOutlined,
+  PlusOutlined,
+  FilterOutlined
+} from "@ant-design/icons";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { clustersApi } from "@/api/clusters";
@@ -7,12 +33,16 @@ import { hotspotsApi } from "@/api/hotspots";
 import type { ClusterInfo, HotspotDetail } from "@/types/api";
 import type { DataNode } from "antd/es/tree";
 import { STATUS_MAP } from "./components/HotspotTableColumns";
-import type { Dayjs } from 'dayjs';
+import type { Dayjs } from "dayjs";
 
 function Hotspots() {
   const queryClient = useQueryClient();
-  const [selectedClusterId, setSelectedClusterId] = useState<number | null>(null);
-  const [selectedHotspot, setSelectedHotspot] = useState<HotspotDetail | null>(null);
+  const [selectedClusterId, setSelectedClusterId] = useState<number | null>(
+    null
+  );
+  const [selectedHotspot, setSelectedHotspot] = useState<HotspotDetail | null>(
+    null
+  );
   const [hotspotDetailVisible, setHotspotDetailVisible] = useState(false);
   const [renameModalVisible, setRenameModalVisible] = useState(false);
   const [newClusterName, setNewClusterName] = useState("");
@@ -21,14 +51,21 @@ function Hotspots() {
   const [moveHotspotModalVisible, setMoveHotspotModalVisible] = useState(false);
   const [selectedHotspotIds, setSelectedHotspotIds] = useState<number[]>([]);
   const [targetClusterId, setTargetClusterId] = useState<number | null>(null);
-  const [createClusterModalVisible, setCreateClusterModalVisible] = useState(false);
+  const [createClusterModalVisible, setCreateClusterModalVisible] =
+    useState(false);
   const [createClusterName, setCreateClusterName] = useState("");
   const [clusterSearchKeyword, setClusterSearchKeyword] = useState("");
   const [filterStatusList, setFilterStatusList] = useState<string[]>([]);
-  const [filterDateRange, setFilterDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
+  const [filterDateRange, setFilterDateRange] = useState<
+    [Dayjs | null, Dayjs | null] | null
+  >(null);
 
   // 获取所有聚簇
-  const { data: clustersData, refetch: refetchClusters, isLoading: clustersLoading } = useQuery({
+  const {
+    data: clustersData,
+    refetch: refetchClusters,
+    isLoading: clustersLoading
+  } = useQuery({
     queryKey: ["clusters", clusterSearchKeyword],
     queryFn: async () => {
       const allClusters = await clustersApi.list();
@@ -45,14 +82,14 @@ function Hotspots() {
         // 获取搜索到的热点所属的聚簇ID
         const matchedClusterIds = new Set(
           searchResult.items
-            .filter(h => h.cluster_id !== null)
-            .map(h => h.cluster_id!)
+            .filter((h) => h.cluster_id !== null)
+            .map((h) => h.cluster_id!)
         );
 
         // 过滤出包含匹配热点的聚簇
         return {
           ...allClusters,
-          items: allClusters.items.filter(c => matchedClusterIds.has(c.id))
+          items: allClusters.items.filter((c) => matchedClusterIds.has(c.id))
         };
       }
 
@@ -61,28 +98,34 @@ function Hotspots() {
   });
 
   // 应用过滤条件
-  const filteredClusters = clustersData?.items.filter((cluster: ClusterInfo) => {
-    // 状态过滤
-    if (filterStatusList.length > 0) {
-      const hasMatchingStatus = cluster.statuses.some(status => filterStatusList.includes(status));
-      if (!hasMatchingStatus) return false;
-    }
+  const filteredClusters =
+    clustersData?.items.filter((cluster: ClusterInfo) => {
+      // 状态过滤
+      if (filterStatusList.length > 0) {
+        const hasMatchingStatus = cluster.statuses.some((status) =>
+          filterStatusList.includes(status)
+        );
+        if (!hasMatchingStatus) return false;
+      }
 
-    // 时间过滤
-    if (filterDateRange && filterDateRange[0] && filterDateRange[1]) {
-      const clusterTime = new Date(cluster.last_hotspot_update).getTime();
-      const startTime = filterDateRange[0].valueOf();
-      const endTime = filterDateRange[1].valueOf();
-      if (clusterTime < startTime || clusterTime > endTime) return false;
-    }
+      // 时间过滤
+      if (filterDateRange && filterDateRange[0] && filterDateRange[1]) {
+        const clusterTime = new Date(cluster.last_hotspot_update).getTime();
+        const startTime = filterDateRange[0].valueOf();
+        const endTime = filterDateRange[1].valueOf();
+        if (clusterTime < startTime || clusterTime > endTime) return false;
+      }
 
-    return true;
-  }) || [];
+      return true;
+    }) || [];
 
   // 获取选中聚簇的热点
   const { data: hotspotsData, isLoading: hotspotsLoading } = useQuery({
     queryKey: ["cluster-hotspots", selectedClusterId],
-    queryFn: () => selectedClusterId ? clustersApi.getHotspots(selectedClusterId) : Promise.resolve(null),
+    queryFn: () =>
+      selectedClusterId
+        ? clustersApi.getHotspots(selectedClusterId)
+        : Promise.resolve(null),
     enabled: !!selectedClusterId
   });
 
@@ -104,7 +147,9 @@ function Hotspots() {
     mutationFn: hotspotsApi.delete,
     onSuccess: () => {
       message.success("热点删除成功");
-      queryClient.invalidateQueries({ queryKey: ["cluster-hotspots", selectedClusterId] });
+      queryClient.invalidateQueries({
+        queryKey: ["cluster-hotspots", selectedClusterId]
+      });
       refetchClusters();
     },
     onError: (error: any) => {
@@ -114,8 +159,13 @@ function Hotspots() {
 
   // 重命名聚簇
   const renameClusterMutation = useMutation({
-    mutationFn: ({ clusterId, clusterName }: { clusterId: number; clusterName: string }) =>
-      clustersApi.update(clusterId, { cluster_name: clusterName }),
+    mutationFn: ({
+      clusterId,
+      clusterName
+    }: {
+      clusterId: number;
+      clusterName: string;
+    }) => clustersApi.update(clusterId, { cluster_name: clusterName }),
     onSuccess: () => {
       message.success("聚簇重命名成功");
       setRenameModalVisible(false);
@@ -144,14 +194,23 @@ function Hotspots() {
 
   // 移动热点到聚簇
   const moveHotspotMutation = useMutation({
-    mutationFn: ({ hotspotIds }: { hotspotIds: number[]; targetClusterId: number }) =>
-      clustersApi.split(selectedClusterId!, { hotspot_ids: hotspotIds }),
+    mutationFn: ({
+      hotspotIds
+    }: {
+      hotspotIds: number[];
+      targetClusterId: number;
+    }) => clustersApi.split(selectedClusterId!, { hotspot_ids: hotspotIds }),
     onSuccess: async (_, variables) => {
       // 拆分后，将热点合并到目标聚簇
       if (variables.targetClusterId) {
-        const newClusterId = await clustersApi.list().then(res =>
-          res.items.find(c => !clustersData?.items.find(old => old.id === c.id))?.id
-        );
+        const newClusterId = await clustersApi
+          .list()
+          .then(
+            (res) =>
+              res.items.find(
+                (c) => !clustersData?.items.find((old) => old.id === c.id)
+              )?.id
+          );
         if (newClusterId) {
           await clustersApi.merge({
             source_cluster_ids: [newClusterId, variables.targetClusterId]
@@ -162,7 +221,9 @@ function Hotspots() {
       setMoveHotspotModalVisible(false);
       setSelectedHotspotIds([]);
       setTargetClusterId(null);
-      queryClient.invalidateQueries({ queryKey: ["cluster-hotspots", selectedClusterId] });
+      queryClient.invalidateQueries({
+        queryKey: ["cluster-hotspots", selectedClusterId]
+      });
       refetchClusters();
     },
     onError: (error: any) => {
@@ -194,30 +255,43 @@ function Hotspots() {
       }, {} as Record<string, number>);
 
       // 检查是否所有热点都是"已过滤"状态
-      const allFiltered = cluster.statuses.length > 0 &&
-        cluster.statuses.every(status => status === 'filtered');
+      const allFiltered =
+        cluster.statuses.length > 0 &&
+        cluster.statuses.every((status) => status === "filtered");
 
       // 格式化时间
-      const updateTime = new Date(cluster.last_hotspot_update).toLocaleString('zh-CN', {
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+      const updateTime = new Date(cluster.last_hotspot_update).toLocaleString(
+        "zh-CN",
+        {
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit"
+        }
+      );
 
       return {
         key: `cluster-${cluster.id}`,
         title: (
-          <div style={{ padding: '4px 0' }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4 }}>
-              <span style={{ fontWeight: 500 }}>
-                {cluster.cluster_name}
-              </span>
-              <span style={{ marginLeft: 8, color: '#666', fontSize: 12 }}>
+          <div style={{ padding: "4px 0" }}>
+            <div
+              style={{ display: "flex", alignItems: "center", marginBottom: 4 }}
+            >
+              <span style={{ fontWeight: 500 }}>{cluster.cluster_name}</span>
+              <span style={{ marginLeft: 8, color: "#666", fontSize: 12 }}>
                 ({cluster.member_count})
               </span>
               {allFiltered && (
-                <Tag color="orange" style={{ marginLeft: 8, fontSize: 11, padding: '0 4px', height: 18, lineHeight: '18px' }}>
+                <Tag
+                  color="orange"
+                  style={{
+                    marginLeft: 8,
+                    fontSize: 11,
+                    padding: "0 4px",
+                    height: 18,
+                    lineHeight: "18px"
+                  }}
+                >
                   已过滤
                 </Tag>
               )}
@@ -226,12 +300,19 @@ function Hotspots() {
             <div style={{ marginBottom: 4 }}>
               <Space size={4}>
                 {Object.entries(statusCounts).map(([status, count]) => {
-                  const statusInfo = STATUS_MAP[status as keyof typeof STATUS_MAP];
+                  const statusInfo =
+                    STATUS_MAP[status as keyof typeof STATUS_MAP];
                   return statusInfo ? (
                     <Tag
                       key={status}
                       color={statusInfo.color}
-                      style={{ fontSize: 10, padding: '0 4px', height: 16, lineHeight: '16px', margin: 0 }}
+                      style={{
+                        fontSize: 10,
+                        padding: "0 4px",
+                        height: 16,
+                        lineHeight: "16px",
+                        margin: 0
+                      }}
                     >
                       {statusInfo.label}: {count}
                     </Tag>
@@ -239,9 +320,7 @@ function Hotspots() {
                 })}
               </Space>
             </div>
-            <div style={{ fontSize: 11, color: '#999' }}>
-              {updateTime}
-            </div>
+            <div style={{ fontSize: 11, color: "#999" }}>{updateTime}</div>
           </div>
         ),
         isLeaf: false,
@@ -279,7 +358,9 @@ function Hotspots() {
   // 重命名聚簇
   const handleRenameCluster = () => {
     if (!selectedClusterId) return;
-    const cluster = clustersData?.items.find((c: ClusterInfo) => c.id === selectedClusterId);
+    const cluster = clustersData?.items.find(
+      (c: ClusterInfo) => c.id === selectedClusterId
+    );
     if (cluster) {
       setNewClusterName(cluster.cluster_name);
       setRenameModalVisible(true);
@@ -344,6 +425,12 @@ function Hotspots() {
   // 热点表格列
   const columns = [
     {
+      title: "ID",
+      dataIndex: "id",
+      key: "id",
+      width: 80
+    },
+    {
       title: "关键词",
       dataIndex: "keyword",
       key: "keyword",
@@ -385,6 +472,22 @@ function Hotspots() {
       key: "last_seen_at",
       width: 180,
       render: (date: string) => new Date(date).toLocaleString()
+    },
+    {
+      title: "爬取信息",
+      key: "crawl_info",
+      dataIndex: "crawl_info",
+      width: 120,
+      render: (_: any, record: HotspotDetail) => (
+        <Space direction="vertical" size={0}>
+          <Text style={{ fontSize: 12 }}>次数: {record.crawl_count}</Text>
+          {record.crawl_failed_count > 0 && (
+            <Text type="danger" style={{ fontSize: 12 }}>
+              失败: {record.crawl_failed_count}
+            </Text>
+          )}
+        </Space>
+      )
     },
     {
       title: "操作",
@@ -446,36 +549,65 @@ function Hotspots() {
               value={clusterSearchKeyword}
               onChange={(e) => setClusterSearchKeyword(e.target.value)}
               loading={clustersLoading}
-              style={{ width: '100%' }}
+              style={{ width: "100%" }}
             />
           </div>
 
           {/* 过滤器 */}
-          <div style={{ marginBottom: 12, display: 'flex', gap: 8, flexDirection: 'column' }}>
+          <div
+            style={{
+              marginBottom: 12,
+              display: "flex",
+              gap: 8,
+              flexDirection: "column"
+            }}
+          >
             <Dropdown
-              trigger={['click']}
+              trigger={["click"]}
               menu={{
-                items: [],
+                items: []
                 // 使用自定义渲染
               }}
               dropdownRender={() => (
-                <div style={{ background: '#fff', borderRadius: 4, boxShadow: '0 2px 8px rgba(0,0,0,0.15)', padding: 12, minWidth: 200 }}>
-                  <div style={{ marginBottom: 8, fontWeight: 500, fontSize: 12 }}>按状态过滤</div>
+                <div
+                  style={{
+                    background: "#fff",
+                    borderRadius: 4,
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                    padding: 12,
+                    minWidth: 200
+                  }}
+                >
+                  <div
+                    style={{ marginBottom: 8, fontWeight: 500, fontSize: 12 }}
+                  >
+                    按状态过滤
+                  </div>
                   <Checkbox.Group
                     value={filterStatusList}
-                    onChange={(values) => setFilterStatusList(values as string[])}
-                    style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+                    onChange={(values) =>
+                      setFilterStatusList(values as string[])
+                    }
+                    style={{ display: "flex", flexDirection: "column", gap: 4 }}
                   >
                     {Object.entries(STATUS_MAP).map(([key, value]) => (
                       <Checkbox key={key} value={key}>
-                        <Tag color={value.color} style={{ fontSize: 11, margin: 0 }}>
+                        <Tag
+                          color={value.color}
+                          style={{ fontSize: 11, margin: 0 }}
+                        >
                           {value.label}
                         </Tag>
                       </Checkbox>
                     ))}
                   </Checkbox.Group>
-                  <div style={{ marginTop: 8, display: 'flex', gap: 4 }}>
-                    <Button size="small" onClick={() => setFilterStatusList([])}>清除</Button>
+                  <div style={{ marginTop: 8, display: "flex", gap: 4 }}>
+                    <Button
+                      size="small"
+                      onClick={() => setFilterStatusList([])}
+                    >
+                      清除
+                    </Button>
                   </div>
                 </div>
               )}
@@ -483,19 +615,20 @@ function Hotspots() {
               <Button
                 icon={<FilterOutlined />}
                 size="small"
-                style={{ width: '100%' }}
+                style={{ width: "100%" }}
               >
-                状态过滤 {filterStatusList.length > 0 && `(${filterStatusList.length})`}
+                状态过滤{" "}
+                {filterStatusList.length > 0 && `(${filterStatusList.length})`}
               </Button>
             </Dropdown>
 
             <DatePicker.RangePicker
               size="small"
-              placeholder={['开始时间', '结束时间']}
-              style={{ width: '100%' }}
+              placeholder={["开始时间", "结束时间"]}
+              style={{ width: "100%" }}
               value={filterDateRange}
               onChange={(dates) => setFilterDateRange(dates)}
-              showTime={{ format: 'HH:mm' }}
+              showTime={{ format: "HH:mm" }}
               format="YYYY-MM-DD HH:mm"
             />
           </div>
@@ -506,13 +639,19 @@ function Hotspots() {
             selectable
             treeData={treeData}
             onSelect={handleSelect}
-            selectedKeys={selectedClusterId ? [`cluster-${selectedClusterId}`] : []}
+            selectedKeys={
+              selectedClusterId ? [`cluster-${selectedClusterId}`] : []
+            }
           />
         </Card>
 
         {/* 右侧：热点列表 */}
         <Card
-          title={selectedCluster ? `${selectedCluster.cluster_name} - 热点列表` : "请选择聚簇"}
+          title={
+            selectedCluster
+              ? `${selectedCluster.cluster_name} - 热点列表`
+              : "请选择聚簇"
+          }
           style={{ flex: 1, overflow: "auto" }}
           extra={
             selectedClusterId && (
@@ -560,7 +699,9 @@ function Hotspots() {
               }}
             />
           ) : (
-            <div style={{ textAlign: "center", padding: "60px 0", color: "#999" }}>
+            <div
+              style={{ textAlign: "center", padding: "60px 0", color: "#999" }}
+            >
               请从左侧选择一个聚簇查看热点
             </div>
           )}
@@ -590,7 +731,9 @@ function Hotspots() {
                   if (e.target.checked) {
                     setSelectedClusters([...selectedClusters, cluster.id]);
                   } else {
-                    setSelectedClusters(selectedClusters.filter((id) => id !== cluster.id));
+                    setSelectedClusters(
+                      selectedClusters.filter((id) => id !== cluster.id)
+                    );
                   }
                 }}
               >
@@ -666,16 +809,21 @@ function Hotspots() {
       >
         {selectedHotspot && (
           <Descriptions column={1} bordered>
-            <Descriptions.Item label="关键词">{selectedHotspot.keyword}</Descriptions.Item>
+            <Descriptions.Item label="关键词">
+              {selectedHotspot.keyword}
+            </Descriptions.Item>
             <Descriptions.Item label="标准化关键词">
               {selectedHotspot.normalized_keyword}
             </Descriptions.Item>
             <Descriptions.Item label="状态">
               <Tag color={STATUS_MAP[selectedHotspot.status]?.color}>
-                {STATUS_MAP[selectedHotspot.status]?.label || selectedHotspot.status}
+                {STATUS_MAP[selectedHotspot.status]?.label ||
+                  selectedHotspot.status}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="聚簇ID">{selectedHotspot.cluster_id}</Descriptions.Item>
+            <Descriptions.Item label="聚簇ID">
+              {selectedHotspot.cluster_id}
+            </Descriptions.Item>
             <Descriptions.Item label="出现次数">
               {selectedHotspot.appearance_count}
             </Descriptions.Item>
@@ -689,7 +837,11 @@ function Hotspots() {
               {selectedHotspot.embedding_model}
             </Descriptions.Item>
             <Descriptions.Item label="是否过滤">
-              {selectedHotspot.is_filtered ? <Tag color="red">是</Tag> : <Tag color="green">否</Tag>}
+              {selectedHotspot.is_filtered ? (
+                <Tag color="red">是</Tag>
+              ) : (
+                <Tag color="green">否</Tag>
+              )}
             </Descriptions.Item>
             {selectedHotspot.filter_reason && (
               <Descriptions.Item label="过滤原因">
@@ -701,7 +853,9 @@ function Hotspots() {
                 {new Date(selectedHotspot.filtered_at).toLocaleString()}
               </Descriptions.Item>
             )}
-            <Descriptions.Item label="爬取次数">{selectedHotspot.crawl_count}</Descriptions.Item>
+            <Descriptions.Item label="爬取次数">
+              {selectedHotspot.crawl_count}
+            </Descriptions.Item>
             {selectedHotspot.last_crawled_at && (
               <Descriptions.Item label="最后爬取时间">
                 {new Date(selectedHotspot.last_crawled_at).toLocaleString()}

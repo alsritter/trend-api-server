@@ -957,7 +957,7 @@ class HotspotService:
                 source_hotspot = await conn.fetchrow(
                     """
                     SELECT keyword, normalized_keyword, cluster_id, platforms,
-                           status, is_filtered, filter_reason
+                           status, is_filtered, filter_reason, filtered_at
                     FROM hotspots
                     WHERE id = $1
                     """,
