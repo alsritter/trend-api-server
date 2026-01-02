@@ -452,3 +452,7 @@ Content-Type: application/json
 
 ### 剔除过时热词
 POST {{baseUrl}}/api/v1/hotspots/mark-outdated
+
+
+### 获取 contents
+GET {{baseUrl}}/api/v1/hotspots/838/contents

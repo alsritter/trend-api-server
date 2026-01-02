@@ -12,6 +12,7 @@ class AccountCreateRequest(BaseModel):
 
 class AccountUpdateRequest(BaseModel):
     """更新账号请求"""
+    account_name: Optional[str] = Field(None, description="账号名称", min_length=1, max_length=64)
     cookies: Optional[str] = Field(None, description="登录 cookies")
     status: Optional[int] = Field(None, description="账号状态 (0:正常, -1:失效)")
 

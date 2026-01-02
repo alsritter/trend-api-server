@@ -4,11 +4,11 @@ import { accountsApi } from '@/api/accounts'
 import { PLATFORM_OPTIONS, ACCOUNT_STATUS_MAP } from '@/utils/constants'
 import { formatDateTime } from '@/utils/format'
 import { useState } from 'react'
-import type { Account, AccountCreateRequest } from '@/types/api'
+import type { Account } from '@/types/api'
 
 function Accounts() {
   const [isModalOpen, setIsModalOpen] = useState(false)
-  // const [editingAccount, setEditingAccount] = useState<Account | null>(null)
+  const [editingAccount, setEditingAccount] = useState<Account | null>(null)
   const [form] = Form.useForm()
   const queryClient = useQueryClient()
 
@@ -24,6 +24,19 @@ function Accounts() {
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
       setIsModalOpen(false)
       form.resetFields()
+      setEditingAccount(null)
+    },
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) =>
+      accountsApi.update(id, data),
+    onSuccess: () => {
+      message.success('账号更新成功')
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+      setIsModalOpen(false)
+      form.resetFields()
+      setEditingAccount(null)
     },
   })
 
@@ -72,6 +85,20 @@ function Accounts() {
         <Space>
           <Button
             type="link"
+            onClick={() => {
+              setEditingAccount(record)
+              form.setFieldsValue({
+                account_name: record.account_name,
+                platform_name: record.platform_name,
+                status: record.status,
+              })
+              setIsModalOpen(true)
+            }}
+          >
+            编辑
+          </Button>
+          <Button
+            type="link"
             danger
             onClick={() => {
               Modal.confirm({
@@ -88,8 +115,17 @@ function Accounts() {
     },
   ]
 
-  const handleSubmit = async (values: AccountCreateRequest) => {
-    createMutation.mutate(values)
+  const handleSubmit = async (values: any) => {
+    if (editingAccount) {
+      // 编辑模式
+      updateMutation.mutate({
+        id: editingAccount.id,
+        data: values,
+      })
+    } else {
+      // 创建模式
+      createMutation.mutate(values)
+    }
   }
 
   return (
@@ -112,37 +148,55 @@ function Accounts() {
       </Card>
 
       <Modal
-        title="新增账号"
+        title={editingAccount ? '编辑账号' : '新增账号'}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false)
           form.resetFields()
+          setEditingAccount(null)
         }}
         onOk={() => form.submit()}
-        confirmLoading={createMutation.isPending}
+        confirmLoading={createMutation.isPending || updateMutation.isPending}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
           <Form.Item
             name="account_name"
             label="账号名称"
-            rules={[{ required: true, message: '请输入账号名称' }]}
+            rules={[{ required: !editingAccount, message: '请输入账号名称' }]}
           >
-            <Input placeholder="请输入账号名称" />
+            <Input placeholder="请输入账号名称" disabled={!!editingAccount} />
           </Form.Item>
           <Form.Item
             name="platform_name"
             label="平台"
-            rules={[{ required: true, message: '请选择平台' }]}
+            rules={[{ required: !editingAccount, message: '请选择平台' }]}
           >
-            <Select options={PLATFORM_OPTIONS} placeholder="请选择平台" />
+            <Select options={PLATFORM_OPTIONS} placeholder="请选择平台" disabled={!!editingAccount} />
           </Form.Item>
           <Form.Item
             name="cookies"
             label="Cookies"
-            rules={[{ required: true, message: '请输入 Cookies' }]}
+            rules={[{ required: !editingAccount, message: '请输入 Cookies' }]}
           >
-            <Input.TextArea rows={4} placeholder="请粘贴登录后的 Cookies" />
+            <Input.TextArea
+              rows={4}
+              placeholder={editingAccount ? '留空则不更新 Cookies' : '请粘贴登录后的 Cookies'}
+            />
           </Form.Item>
+          {editingAccount && (
+            <Form.Item
+              name="status"
+              label="账号状态"
+            >
+              <Select
+                options={[
+                  { label: '正常', value: 0 },
+                  { label: '失效', value: -1 },
+                ]}
+                placeholder="请选择账号状态"
+              />
+            </Form.Item>
+          )}
         </Form>
       </Modal>
     </div>

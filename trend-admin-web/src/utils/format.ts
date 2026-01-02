@@ -2,12 +2,18 @@ import dayjs from 'dayjs';
 
 /**
  * 格式化日期时间
- * 支持秒级和毫秒级时间戳
+ * 支持秒级和毫秒级时间戳,以及 ISO 8601 格式的字符串
  */
 export const formatDateTime = (date: string | number): string => {
   if (!date) return '-';
+
+  // 如果是字符串且包含 '-' 或 'T',说明是 ISO 8601 格式的日期字符串
+  if (typeof date === 'string' && (date.includes('-') || date.includes('T'))) {
+    return dayjs(date).format('YYYY-MM-DD HH:mm:ss');
+  }
+
   const timestamp = typeof date === 'string' ? parseInt(date, 10) : date;
-  // 如果是秒级时间戳（10位数字），转换为毫秒
+  // 如果是秒级时间戳(10位数字),转换为毫秒
   const ms = timestamp.toString().length === 10 ? timestamp * 1000 : timestamp;
   return dayjs(ms).format('YYYY-MM-DD HH:mm:ss');
 };
@@ -44,7 +50,7 @@ export const formatCountdown = (timestamp: number): string => {
 };
 
 /**
- * 格式化数字（添加千分位）
+ * 格式化数字(添加千分位)
  */
 export const formatNumber = (num: number): string => {
   return num.toLocaleString('zh-CN');

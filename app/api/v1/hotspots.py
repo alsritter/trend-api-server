@@ -614,7 +614,7 @@ async def get_hotspot_contents(
     获取热点关联的所有内容和评论
 
     功能：
-    - 查询热点对应关键词在各平台爬取的所有内容
+    - 直接查询各平台内容表中 hotspot_id 匹配的所有内容
     - 返回每个平台的完整内容列表和评论列表
     - 按平台分组展示数据
 
@@ -627,9 +627,7 @@ async def get_hotspot_contents(
     - 统计信息（总内容数、总评论数）
 
     说明：
-    - 通过 hotspot_id 关联到爬虫任务（crawler_tasks 表）
-    - 爬虫任务使用热词的 keyword 字段作为搜索关键词
-    - 根据关键词在各平台的内容表中查询匹配的内容
+    - 直接通过内容表中的 hotspot_id 字段查询内容
     - 再根据内容ID查询对应的评论
     """
     try:
@@ -640,71 +638,45 @@ async def get_hotspot_contents(
 
         keyword = hotspot.keyword
 
-        # 2. 获取该热点的所有爬虫任务
-        repo = TaskRepository(conn)
-        tasks = await repo.get_tasks_by_hotspot_id(hotspot_id)
-
-        if not tasks:
-            # 没有爬虫任务，返回空结果
-            return GetHotspotContentsResponse(
-                success=True,
-                hotspot_id=hotspot_id,
-                hotspot_keyword=keyword,
-                platforms=[],
-                total_contents=0,
-                total_comments=0,
-            )
-
-        # 3. 按平台分组获取内容和评论
+        # 2. 按平台分组获取内容和评论
         platforms_data = []
         total_contents_count = 0
         total_comments_count = 0
 
-        # 获取所有平台（去重）
-        platforms_set = {task.platform for task in tasks if task.status == "COMPLETED"}
-
         async with conn.cursor(aiomysql.DictCursor) as cursor:
-            for platform in platforms_set:
-                if platform not in PLATFORM_CONTENT_TABLES:
-                    logger.warning(f"不支持的平台: {platform}")
-                    continue
-
-                content_table = PLATFORM_CONTENT_TABLES[platform]
+            for platform, content_table in PLATFORM_CONTENT_TABLES.items():
                 comment_table = PLATFORM_COMMENT_TABLES[platform]
                 content_id_field = PLATFORM_CONTENT_ID_FIELDS.get(platform, "note_id")
 
-                # 查询该平台下匹配关键词的所有内容
-                # 使用 LIKE 匹配标题、描述或内容字段
+                # 直接查询该平台下 hotspot_id 匹配的所有内容
                 content_sql = f"""
                     SELECT * FROM {content_table}
-                    WHERE (title LIKE %s OR `desc` LIKE %s OR content LIKE %s)
+                    WHERE hotspot_id = %s
                     ORDER BY add_ts DESC
                 """
-                keyword_pattern = f"%{keyword}%"
-                await cursor.execute(
-                    content_sql, (keyword_pattern, keyword_pattern, keyword_pattern)
-                )
+                await cursor.execute(content_sql, (hotspot_id,))
                 contents = await cursor.fetchall()
+
+                # 如果该平台没有内容，跳过
+                if not contents:
+                    continue
 
                 # 查询这些内容的所有评论
                 comments = []
-                if contents:
-                    content_ids = [
-                        c.get(content_id_field)
-                        for c in contents
-                        if c.get(content_id_field)
-                    ]
+                content_ids = [
+                    c.get(content_id_field) for c in contents if c.get(content_id_field)
+                ]
 
-                    if content_ids:
-                        # 构建 IN 查询
-                        placeholders = ",".join(["%s"] * len(content_ids))
-                        comment_sql = f"""
-                            SELECT * FROM {comment_table}
-                            WHERE {content_id_field} IN ({placeholders})
-                            ORDER BY add_ts DESC
-                        """
-                        await cursor.execute(comment_sql, content_ids)
-                        comments = await cursor.fetchall()
+                if content_ids:
+                    # 构建 IN 查询
+                    placeholders = ",".join(["%s"] * len(content_ids))
+                    comment_sql = f"""
+                        SELECT * FROM {comment_table}
+                        WHERE {content_id_field} IN ({placeholders})
+                        ORDER BY add_ts DESC
+                    """
+                    await cursor.execute(comment_sql, content_ids)
+                    comments = await cursor.fetchall()
 
                 # 统计
                 platform_contents_count = len(contents)

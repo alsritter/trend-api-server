@@ -155,14 +155,18 @@ async def update_account(
     """
     更新账号配置
 
-    - **cookies**: 新的 cookies（可选）
-    - **status**: 账号状态（可选，0:正常, -1:失效）
+    - **account_name**: 账号名称(可选)
+    - **cookies**: 新的 cookies(可选)
+    - **status**: 账号状态(可选,0:正常, -1:失效)
     """
     try:
         async with conn.cursor() as cursor:
             update_fields = []
             params = []
 
+            if request.account_name is not None:
+                update_fields.append("account_name = %s")
+                params.append(request.account_name)
             if request.cookies is not None:
                 update_fields.append("cookies = %s")
                 params.append(request.cookies)

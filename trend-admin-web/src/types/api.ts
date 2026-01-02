@@ -31,6 +31,7 @@ export interface AccountCreateRequest {
 }
 
 export interface AccountUpdateRequest {
+  account_name?: string;
   cookies?: string;
   status?: number;
 }
