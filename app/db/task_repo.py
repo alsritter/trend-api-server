@@ -188,3 +188,26 @@ class TaskRepository:
             await cursor.execute(sql, (hotspot_id,))
             rows = await cursor.fetchall()
             return [TaskDB(**row) for row in rows]
+
+    async def get_timeout_tasks(self, timeout_seconds: int) -> List[TaskDB]:
+        """
+        获取超时的任务
+
+        查询所有状态为 STARTED 或 PROGRESS，且已超过指定时间未更新的任务
+
+        Args:
+            timeout_seconds: 超时时间（秒）
+
+        Returns:
+            超时任务列表
+        """
+        async with self.conn.cursor(aiomysql.DictCursor) as cursor:
+            sql = """
+            SELECT * FROM crawler_tasks
+            WHERE status IN ('STARTED', 'PROGRESS', 'PENDING')
+            AND TIMESTAMPDIFF(SECOND, updated_at, NOW()) > %s
+            ORDER BY updated_at ASC
+            """
+            await cursor.execute(sql, (timeout_seconds,))
+            rows = await cursor.fetchall()
+            return [TaskDB(**row) for row in rows]

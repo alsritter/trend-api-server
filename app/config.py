@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
 
     # Celery 配置
+    TASK_TIMEOUT_SECONDS: int = 7200  # 任务超时时间（秒），默认2小时
+
     @property
     def CELERY_BROKER_URL(self) -> str:
         if self.REDIS_DB_PWD:

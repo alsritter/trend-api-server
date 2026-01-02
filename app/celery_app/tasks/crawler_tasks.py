@@ -451,7 +451,7 @@ def run_crawler(
             bufsize=1,
         )
 
-        # 实时读取输出并更新进度
+        # 实时读取输出
         stdout_lines = []
 
         # 进度跟踪变量
@@ -460,46 +460,76 @@ def run_crawler(
         current_keyword = ""  # 当前关键词
         current_page = 0  # 当前页码
 
-        while True:
-            output = process.stdout.readline()
-            if output == "" and process.poll() is not None:
-                break
-            if output:
-                line = output.strip()
-                stdout_lines.append(line)
-                logger.info(f"Crawler output: {line}")
+        # 启动后台轮询任务来检查 checkpoint 进度
+        import threading
 
-                # 解析爬虫日志中的关键信息来跟踪进度
+        stop_polling = threading.Event()
+
+        def poll_checkpoint_progress():
+            """后台轮询 checkpoint 进度的线程函数"""
+            nonlocal notes_count, current_keyword, current_page
+
+            try:
+                import sys
+
+                # 动态导入爬虫项目的模块
+                if settings.CRAWLER_BASE_PATH not in sys.path:
+                    sys.path.insert(0, settings.CRAWLER_BASE_PATH)
+
+                from repo.checkpoint.checkpoint_store import (  # type: ignore
+                    CheckpointRepoManager,
+                    CheckpointRedisRepo,
+                    CheckpointJsonFileRepo,
+                )
+
+                # 根据配置选择 checkpoint 存储类型
+                checkpoint_storage_type = env.get(
+                    "CRAWLER_CHECKPOINT_STORAGE_TYPE", "file"
+                )
+                if checkpoint_storage_type == "redis":
+                    checkpoint_repo = CheckpointRedisRepo()
+                else:
+                    checkpoint_repo = CheckpointJsonFileRepo(
+                        cache_dir=os.path.join(
+                            settings.CRAWLER_BASE_PATH, "data/checkpoints"
+                        )
+                    )
+            except ImportError as e:
+                logger.error(f"Failed to import checkpoint modules: {e}")
+                return
+
+            checkpoint_manager = CheckpointRepoManager(checkpoint_repo)
+
+            last_progress_log_time = 0
+            poll_interval = 5  # 每5秒轮询一次
+
+            while not stop_polling.is_set():
                 try:
-                    progress_info = parse_crawler_progress(line, platform)
+                    # 使用事件循环加载 checkpoint
+                    loop = get_event_loop()
+                    checkpoint = loop.run_until_complete(
+                        checkpoint_manager.load_checkpoint(
+                            platform=platform,
+                            mode=crawler_type,
+                            checkpoint_id=checkpoint_id if checkpoint_id else None,
+                        )
+                    )
 
-                    if not progress_info:
-                        continue
+                    if checkpoint:
+                        # 从 checkpoint 获取真实进度
+                        crawled_notes = checkpoint.crawled_note_list or []
+                        notes_count = len(crawled_notes)
+                        current_keyword = checkpoint.current_search_keyword or ""
+                        current_page = checkpoint.current_search_page or 0
 
-                    progress_type = progress_info.get("type")
-
-                    # 处理关键词变化
-                    if progress_type == "keyword":
-                        current_keyword = progress_info.get("keyword", "")
-                        logger.info(f"Progress: {progress_info.get('message', '')}")
-
-                    # 处理页码变化
-                    elif progress_type == "page":
-                        current_page = progress_info.get("page", 0)
-
-                    # 处理爬取数量增加
-                    elif progress_type == "count":
-                        count = progress_info.get("count", 0)
-                        notes_count += count
-
-                        # 计算并更新进度
+                        # 计算进度百分比
                         percentage = (
                             min(int((notes_count / max_notes) * 100), 100)
                             if max_notes > 0
                             else 0
                         )
 
-                        self.update_progress(notes_count, max_notes)
+                        # 更新任务状态到数据库
                         update_task_status_sync(
                             self.request.id,
                             status="PROGRESS",
@@ -508,39 +538,43 @@ def run_crawler(
                             progress_percentage=percentage,
                         )
 
-                        logger.info(
-                            f"Progress: {notes_count}/{max_notes} items ({percentage}%) "
-                            f"- Keyword: '{current_keyword}', Page: {current_page}"
-                        )
+                        # 每30秒打印一次进度日志,避免刷屏
+                        import time
 
-                    # 处理达到最大数量
-                    elif progress_type == "max":
-                        logger.info(f"Progress: {progress_info.get('message', '')}")
-                        update_task_status_sync(
-                            self.request.id,
-                            status="PROGRESS",
-                            progress_current=max_notes,
-                            progress_total=max_notes,
-                            progress_percentage=100,
-                        )
-
-                    # 处理完成状态
-                    elif progress_type == "finished":
-                        logger.info(f"Progress: {progress_info.get('message', '')}")
-                        update_task_status_sync(
-                            self.request.id,
-                            status="PROGRESS",
-                            progress_current=max_notes,
-                            progress_total=max_notes,
-                            progress_percentage=100,
-                        )
-
-                    # 处理其他类型 (detail, comments等)
-                    elif progress_type in ("detail", "comments"):
-                        logger.info(f"Progress: {progress_info.get('message', '')}")
+                        current_time = time.time()
+                        if current_time - last_progress_log_time >= 30:
+                            logger.info(
+                                f"[Checkpoint Progress] {notes_count}/{max_notes} items ({percentage}%) "
+                                f"- Keyword: '{current_keyword}', Page: {current_page}"
+                            )
+                            last_progress_log_time = current_time
 
                 except Exception as e:
-                    logger.debug(f"Failed to parse progress from log: {e}")
+                    logger.debug(f"Failed to poll checkpoint progress: {e}")
+
+                # 等待下次轮询,但可以被 stop_polling 事件中断
+                stop_polling.wait(poll_interval)
+
+        # 启动后台轮询线程
+        polling_thread = threading.Thread(target=poll_checkpoint_progress, daemon=True)
+        polling_thread.start()
+        logger.info("Started background checkpoint polling thread")
+
+        # 读取爬虫输出日志(主要用于调试和记录)
+        try:
+            while True:
+                output = process.stdout.readline()
+                if output == "" and process.poll() is not None:
+                    break
+                if output:
+                    line = output.strip()
+                    stdout_lines.append(line)
+                    logger.info(f"Crawler output: {line}")
+        finally:
+            # 停止后台轮询线程
+            stop_polling.set()
+            polling_thread.join(timeout=5)
+            logger.info("Stopped background checkpoint polling thread")
 
         return_code = process.poll()
 

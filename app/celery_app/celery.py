@@ -8,7 +8,7 @@ celery_app = Celery(
     "trend-api-server",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=["app.celery_app.tasks.crawler_tasks"]
+    include=["app.celery_app.tasks.crawler_tasks"],
 )
 
 # Celery 配置
@@ -41,10 +41,10 @@ celery_app.conf.task_routes = {
 def init_worker_db(**kwargs):
     """在 Celery worker 启动时初始化数据库连接池"""
     from app.db.session import init_db
-    
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    
+
     try:
         loop.run_until_complete(init_db())
         print("[Celery Worker] Database pool initialized successfully")
@@ -58,7 +58,7 @@ def init_worker_db(**kwargs):
 def shutdown_worker_db(**kwargs):
     """在 Celery worker 关闭时清理数据库连接池"""
     from app.db.session import close_db
-    
+
     try:
         loop = asyncio.get_event_loop()
         loop.run_until_complete(close_db())
