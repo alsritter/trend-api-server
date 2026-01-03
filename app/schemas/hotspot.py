@@ -563,7 +563,6 @@ class PlatformContents(BaseModel):
 
     platform: str
     contents: List[dict] = Field(default_factory=list, description="内容列表")
-    comments: List[dict] = Field(default_factory=list, description="评论列表")
     total_contents: int
     total_comments: int
 
