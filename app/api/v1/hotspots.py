@@ -6,6 +6,11 @@ import aiomysql
 from app.services.hotspot_service import hotspot_service
 from app.db.session import get_db
 from app.db.task_repo import TaskRepository
+from app.constants import (
+    PLATFORM_CONTENT_TABLES,
+    PLATFORM_COMMENT_TABLES,
+    PLATFORM_CONTENT_ID_FIELDS,
+)
 from app.schemas.hotspot import (
     # 请求/响应模型
     AddHotspotKeywordRequest,
@@ -39,39 +44,6 @@ from app.schemas.hotspot import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# 平台内容表映射（从 contents.py 复用）
-PLATFORM_CONTENT_TABLES = {
-    "xhs": "xhs_note",
-    "dy": "douyin_aweme",
-    "ks": "kuaishou_video",
-    "bili": "bilibili_video",
-    "wb": "weibo_note",
-    "tieba": "tieba_note",
-    "zhihu": "zhihu_content",
-}
-
-# 平台评论表映射
-PLATFORM_COMMENT_TABLES = {
-    "xhs": "xhs_note_comment",
-    "dy": "douyin_aweme_comment",
-    "ks": "kuaishou_video_comment",
-    "bili": "bilibili_video_comment",
-    "wb": "weibo_note_comment",
-    "tieba": "tieba_comment",
-    "zhihu": "zhihu_comment",
-}
-
-# 平台内容ID字段映射
-PLATFORM_CONTENT_ID_FIELDS = {
-    "dy": "aweme_id",
-    "bili": "video_id",
-    "ks": "video_id",
-    "zhihu": "content_id",
-    "xhs": "note_id",
-    "wb": "note_id",
-    "tieba": "note_id",
-}
 
 
 # ==================== 核心业务接口 ====================
@@ -678,18 +650,32 @@ async def get_hotspot_contents(
                     await cursor.execute(comment_sql, content_ids)
                     comments = await cursor.fetchall()
 
+                # 将评论按 content_id 分组
+                comments_by_content = {}
+                for comment in comments:
+                    cid = comment.get(content_id_field)
+                    if cid:
+                        if cid not in comments_by_content:
+                            comments_by_content[cid] = []
+                        comments_by_content[cid].append(comment)
+
+                # 为每个内容添加其评论列表
+                for content in contents:
+                    cid = content.get(content_id_field)
+                    content["comments"] = comments_by_content.get(cid, [])
+
                 # 统计
                 platform_contents_count = len(contents)
                 platform_comments_count = len(comments)
                 total_contents_count += platform_contents_count
                 total_comments_count += platform_comments_count
 
-                # 添加到结果
+                # 添加到结果（注意：现在 comments 已经嵌套在 contents 中了）
                 platforms_data.append(
                     PlatformContents(
                         platform=platform,
                         contents=contents,
-                        comments=comments,
+                        comments=[],  # 保留字段以兼容现有结构，但评论已嵌套在 contents 中
                         total_contents=platform_contents_count,
                         total_comments=platform_comments_count,
                     )

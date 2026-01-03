@@ -5,53 +5,16 @@ from app.schemas.content import ContentListResponse, CommentListResponse
 from app.schemas.common import APIResponse
 from app.dependencies import get_db
 from app.db.vector_session import get_vector_db
+from app.constants import (
+    PLATFORM_CONTENT_TABLES,
+    PLATFORM_COMMENT_TABLES,
+    PLATFORM_CREATOR_TABLES,
+    PLATFORM_TIME_FIELDS,
+    PLATFORM_CONTENT_ID_FIELDS,
+)
 import asyncpg
 
 router = APIRouter()
-
-# 平台内容表映射
-PLATFORM_CONTENT_TABLES = {
-    "xhs": "xhs_note",
-    "dy": "douyin_aweme",
-    "ks": "kuaishou_video",
-    "bili": "bilibili_video",
-    "wb": "weibo_note",
-    "tieba": "tieba_note",
-    "zhihu": "zhihu_content",
-}
-
-# 平台评论表映射
-PLATFORM_COMMENT_TABLES = {
-    "xhs": "xhs_note_comment",
-    "dy": "douyin_aweme_comment",
-    "ks": "kuaishou_video_comment",
-    "bili": "bilibili_video_comment",
-    "wb": "weibo_note_comment",
-    "tieba": "tieba_comment",
-    "zhihu": "zhihu_comment",
-}
-
-# 平台创作者表映射
-PLATFORM_CREATOR_TABLES = {
-    "xhs": "xhs_creator",
-    "dy": "dy_creator",
-    "ks": "kuaishou_creator",
-    "bili": "bilibili_up_info",
-    "wb": "weibo_creator",
-    "tieba": "tieba_creator",
-    "zhihu": "zhihu_creator",
-}
-
-# 平台时间字段映射
-PLATFORM_TIME_FIELDS = {
-    "xhs": "time",
-    "dy": "create_time",
-    "ks": "create_time",
-    "bili": "create_time",
-    "wb": "create_time",
-    "tieba": "publish_time",
-    "zhihu": "created_time",
-}
 
 
 @router.get("/{platform}/notes", response_model=APIResponse[ContentListResponse])
@@ -198,16 +161,6 @@ async def list_comments(
     table_name = PLATFORM_COMMENT_TABLES[platform]
 
     # 根据平台确定关联字段名
-    PLATFORM_CONTENT_ID_FIELDS = {
-        "dy": "aweme_id",  # 抖音
-        "bili": "video_id",  # B站
-        "ks": "video_id",  # 快手
-        "zhihu": "content_id",  # 知乎
-        "xhs": "note_id",  # 小红书
-        "wb": "note_id",  # 微博
-        "tieba": "note_id",  # 贴吧
-    }
-
     content_id_field = PLATFORM_CONTENT_ID_FIELDS.get(platform, "note_id")
 
     try:
