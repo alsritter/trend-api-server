@@ -675,7 +675,6 @@ async def get_hotspot_contents(
                     PlatformContents(
                         platform=platform,
                         contents=contents,
-                        comments=[],  # 保留字段以兼容现有结构，但评论已嵌套在 contents 中
                         total_contents=platform_contents_count,
                         total_comments=platform_comments_count,
                     )
