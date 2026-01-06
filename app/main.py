@@ -9,7 +9,17 @@ from datetime import datetime
 from app.config import settings
 from app.db.session import init_db, close_db
 from app.db.vector_session import init_vector_db, close_vector_db
-from app.api.v1 import health, tasks, accounts, contents, system, proxy, vectors, hotspots, clusters
+from app.api.v1 import (
+    health,
+    tasks,
+    accounts,
+    contents,
+    system,
+    proxy,
+    vectors,
+    hotspots,
+    clusters,
+)
 
 # 全局任务控制
 timeout_check_task = None
@@ -18,12 +28,15 @@ stop_timeout_check = False
 
 async def check_timeout_tasks_background():
     """后台定期检查超时任务"""
-    from app.db import session
+    from app.db import session, vector_session
     from app.db.task_repo import TaskRepository
     from app.celery_app.celery import celery_app
+    from app.services.hotspot_service import HotspotService
+    from app.schemas.hotspot import HotspotStatus
 
     global stop_timeout_check
     check_interval = 300  # 5分钟检查一次
+    hotspot_service = HotspotService()
 
     print(f"[Timeout Checker] Started background task (interval: {check_interval}s)")
 
@@ -35,17 +48,20 @@ async def check_timeout_tasks_background():
                 break
 
             # 检查数据库连接池是否可用
-            if session.db_pool is None:
+            if session.db_pool is None or vector_session.pg_pool is None:
                 print("[Timeout Checker] Database pool not initialized, skip check")
                 continue
 
             print("[Timeout Checker] Checking for timeout tasks...")
 
+            # 使用 MySQL 连接池查询任务数据
             async with session.db_pool.acquire() as conn:
                 repo = TaskRepository(conn)
 
                 # 获取所有超时的任务
-                timeout_tasks = await repo.get_timeout_tasks(settings.TASK_TIMEOUT_SECONDS)
+                timeout_tasks = await repo.get_timeout_tasks(
+                    settings.TASK_TIMEOUT_SECONDS
+                )
 
                 if not timeout_tasks:
                     print("[Timeout Checker] No timeout tasks found")
@@ -53,17 +69,21 @@ async def check_timeout_tasks_background():
 
                 timeout_count = 0
                 timeout_task_ids = []
+                updated_hotspot_ids = set()  # 记录已更新的热点ID
 
                 # 处理每个超时任务
                 for task in timeout_tasks:
                     try:
                         # 计算任务已运行时间
-                        elapsed_seconds = (datetime.now() - task.updated_at).total_seconds()
+                        elapsed_seconds = (
+                            datetime.now() - task.updated_at
+                        ).total_seconds()
 
                         print(
                             f"[Timeout Checker] Task {task.task_id} timeout detected: "
                             f"status={task.status}, elapsed={elapsed_seconds}s, "
-                            f"platform={task.platform}, type={task.crawler_type}"
+                            f"platform={task.platform}, type={task.crawler_type}, "
+                            f"hotspot_id={task.hotspot_id}"
                         )
 
                         # 更新任务状态为 FAILURE
@@ -79,11 +99,42 @@ async def check_timeout_tasks_background():
                             celery_app.control.revoke(
                                 task.task_id, terminate=True, signal="SIGKILL"
                             )
-                            print(f"[Timeout Checker] Revoked Celery task {task.task_id}")
+                            print(
+                                f"[Timeout Checker] Revoked Celery task {task.task_id}"
+                            )
                         except Exception as revoke_error:
                             print(
                                 f"[Timeout Checker] Failed to revoke task {task.task_id}: {revoke_error}"
                             )
+
+                        # 如果任务关联了热点，更新热点状态为 crawled
+                        if (
+                            task.hotspot_id
+                            and task.hotspot_id not in updated_hotspot_ids
+                        ):
+                            try:
+                                # 检查该热点的所有爬虫任务是否都已完成（SUCCESS 或 FAILURE）
+                                all_tasks = await repo.get_tasks_by_hotspot_id(
+                                    task.hotspot_id
+                                )
+                                all_finished = all(
+                                    t.status in ("SUCCESS", "FAILURE")
+                                    for t in all_tasks
+                                )
+
+                                if all_finished:
+                                    # 更新热点状态为 crawled
+                                    await hotspot_service.update_hotspot_status(
+                                        task.hotspot_id, HotspotStatus.CRAWLED
+                                    )
+                                    updated_hotspot_ids.add(task.hotspot_id)
+                                    print(
+                                        f"[Timeout Checker] Updated hotspot {task.hotspot_id} status to CRAWLED"
+                                    )
+                            except Exception as hotspot_error:
+                                print(
+                                    f"[Timeout Checker] Failed to update hotspot {task.hotspot_id}: {hotspot_error}"
+                                )
 
                         timeout_count += 1
                         timeout_task_ids.append(task.task_id)
@@ -124,7 +175,7 @@ async def lifespan(app: FastAPI):
     print(f"API Documentation: http://localhost:{settings.API_PORT}/docs")
     print(f"Frontend Path: http://localhost:{settings.API_PORT}/")
     print(f"Vector Management: http://localhost:{settings.API_PORT}/vectors.html")
-    print(f"Timeout Checker: Running (interval: 5 minutes)")
+    print("Timeout Checker: Running (interval: 5 minutes)")
     print("=" * 60)
 
     yield
