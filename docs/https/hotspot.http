@@ -254,7 +254,7 @@ GET {{baseUrl}}/api/v1/hotspots/list?page=1&page_size=20
 GET {{baseUrl}}/api/v1/hotspots/list?status=rejected&page=1&page_size=20
 
 ### 场景 12: 根据状态筛选 - 查看 pending_validation 状态的热词（有价值词）
-GET {{baseUrl}}/api/v1/hotspots/list?status=pending_validation&page=1&page_size=20
+GET {{baseUrl}}/api/v1/hotspots/list?status=pending_validation&page=1&page_size=20&hours=1
 
 ### 场景 13: 根据关键词搜索 - 搜索包含"挑战"的热词
 GET {{baseUrl}}/api/v1/hotspots/list?keyword=挑战&page=1&page_size=20

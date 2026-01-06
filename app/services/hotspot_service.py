@@ -723,7 +723,7 @@ class HotspotService:
 
                 # 添加时间过滤
                 if hours:
-                    conditions.append(f"updated_at >= NOW() - INTERVAL '${param_idx} hours'")
+                    conditions.append(f"updated_at >= NOW() - INTERVAL '1 hour' * ${param_idx}")
                     params.append(hours)
                     param_idx += 1
 
@@ -769,7 +769,7 @@ class HotspotService:
 
                 # 添加时间过滤
                 if hours:
-                    conditions.append(f"updated_at >= NOW() - INTERVAL '${param_idx} hours'")
+                    conditions.append(f"last_seen_at >= NOW() - INTERVAL '1 hour' * ${param_idx}")
                     params.append(hours)
                     param_idx += 1
 
