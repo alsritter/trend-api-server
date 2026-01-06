@@ -124,6 +124,7 @@ class CheckHotspotResponse(BaseModel):
     )
     message: str
 
+
 # ==================== 商业报告相关 ====================
 class VirtualProductAnalysis(BaseModel):
     """虚拟产品分析"""
@@ -313,10 +314,14 @@ class ClusterInfo(BaseModel):
     cluster_name: str
     member_count: int
     keywords: List[str]
-    selected_hotspot_id: Optional[int] = Field(None, description="被选中用于验证的热词ID")
+    selected_hotspot_id: Optional[int] = Field(
+        None, description="被选中用于验证的热词ID"
+    )
     created_at: datetime
     updated_at: datetime
-    statuses: List[str] = Field(default_factory=list, description="聚簇中所有热点的状态列表")
+    statuses: List[str] = Field(
+        default_factory=list, description="聚簇中所有热点的状态列表"
+    )
     last_hotspot_update: datetime = Field(..., description="聚簇中热点的最后更新时间")
 
 
@@ -349,7 +354,9 @@ class MergeClustersRequest(BaseModel):
     source_cluster_ids: List[int] = Field(
         ..., min_length=2, description="要合并的源簇ID列表（至少2个）"
     )
-    target_cluster_name: Optional[str] = Field(None, description="目标簇名称（可选，默认使用第一个簇的名称）")
+    target_cluster_name: Optional[str] = Field(
+        None, description="目标簇名称（可选，默认使用第一个簇的名称）"
+    )
 
 
 class MergeClustersResponse(BaseModel):
@@ -364,14 +371,18 @@ class SplitClusterRequest(BaseModel):
     """拆分聚簇请求"""
 
     hotspot_ids: List[int] = Field(..., min_length=1, description="要移出的热点ID列表")
-    new_cluster_name: Optional[str] = Field(None, description="新簇名称（可选，默认使用第一个热点的名称）")
+    new_cluster_name: Optional[str] = Field(
+        None, description="新簇名称（可选，默认使用第一个热点的名称）"
+    )
 
 
 class SplitClusterResponse(BaseModel):
     """拆分聚簇响应"""
 
     success: bool
-    new_cluster_id: Optional[int] = Field(None, description="新创建的簇ID（如果创建了新簇）")
+    new_cluster_id: Optional[int] = Field(
+        None, description="新创建的簇ID（如果创建了新簇）"
+    )
     message: str
 
 
@@ -452,7 +463,9 @@ class MarkOutdatedHotspotsResponse(BaseModel):
     success: bool
     message: str
     marked_count: int = Field(..., description="标记的热词数量")
-    hotspot_ids: List[int] = Field(default_factory=list, description="被标记的热词ID列表")
+    hotspot_ids: List[int] = Field(
+        default_factory=list, description="被标记的热词ID列表"
+    )
 
 
 # ==================== 触发式爬虫相关 ====================
@@ -461,35 +474,20 @@ class TriggerCrawlRequest(BaseModel):
 
     hotspot_id: int = Field(..., description="热点ID")
     platforms: List[str] = Field(
-        ...,
-        description="要爬取的平台列表",
-        min_length=1,
-        example=["xhs", "dy", "bili"]
+        ..., description="要爬取的平台列表", min_length=1, example=["xhs", "dy", "bili"]
     )
     crawler_type: str = Field(
         default="search",
         description="爬虫类型 (search|detail|creator|homefeed)",
-        pattern="^(search|detail|creator|homefeed)$"
+        pattern="^(search|detail|creator|homefeed)$",
     )
     max_notes_count: int = Field(
-        default=50,
-        ge=1,
-        le=1000,
-        description="每个平台最大爬取数量"
+        default=50, ge=1, le=1000, description="每个平台最大爬取数量"
     )
-    enable_comments: bool = Field(
-        default=True,
-        description="是否爬取评论"
-    )
-    enable_sub_comments: bool = Field(
-        default=False,
-        description="是否爬取二级评论"
-    )
+    enable_comments: bool = Field(default=True, description="是否爬取评论")
+    enable_sub_comments: bool = Field(default=False, description="是否爬取二级评论")
     max_comments_count: int = Field(
-        default=20,
-        ge=1,
-        le=500,
-        description="每条内容最大评论数量"
+        default=20, ge=1, le=500, description="每条内容最大评论数量"
     )
 
 

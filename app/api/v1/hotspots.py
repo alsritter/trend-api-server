@@ -202,6 +202,9 @@ async def list_hotspots(
     similarity_threshold: float = Query(
         default=0.7, ge=0.0, le=1.0, description="相似度阈值"
     ),
+    hours: Optional[int] = Query(
+        None, ge=1, le=720, description="时间范围（小时），过滤最近更新的热点"
+    ),
 ):
     """
     列出热点（分页、过滤、搜索）
@@ -211,6 +214,7 @@ async def list_hotspots(
     - 按状态过滤
     - 关键词模糊搜索 (keyword)
     - 向量相似度搜索 (similarity_search)
+    - 时间范围过滤 (hours)
     """
     try:
         result = await hotspot_service.list_hotspots(
@@ -220,6 +224,7 @@ async def list_hotspots(
             keyword=keyword,
             similarity_search=similarity_search,
             similarity_threshold=similarity_threshold,
+            hours=hours,
         )
         return ListHotspotsResponse(
             success=True,
@@ -232,7 +237,7 @@ async def list_hotspots(
         logger.error(
             f"列出热点时发生错误 - page: {page}, page_size: {page_size}, "
             f"status: {status}, keyword: {keyword}, similarity_search: {similarity_search}, "
-            f"error: {str(e)}, traceback: {traceback.format_exc()}"
+            f"hours: {hours}, error: {str(e)}, traceback: {traceback.format_exc()}"
         )
         raise HTTPException(status_code=500, detail=str(e))
 

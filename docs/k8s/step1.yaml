@@ -1,0 +1,92 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: coze-workflow-trigger-step3
+  namespace: lazygpt-pro
+spec:
+  schedule: "0 0-1,9-23 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 1800
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: coze-workflow-trigger-step3
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: workflow-trigger
+              image: alibaba-cloud-linux-3-registry.cn-hangzhou.cr.aliyuncs.com/alinux3/python:latest
+              command:
+                - /bin/bash
+                - '-c'
+                - |
+                  set -e
+
+                  # 配置参数
+                  BEARER_TOKEN="pat_eKz1rDJSjG4mbYdQ23uxoL0Nm49DXrgILZdjmODksvMK5h7YXLMJ1EoJJBcQHptP"
+                  WORKFLOW_ID="7590189584839868479"
+                  API_BASE_URL="https://api.coze.cn/v1"
+
+                  echo "✅ Current time is within execution window, proceeding..."
+                  echo "📅 Execution time: $(date '+%Y-%m-%d %H:%M:%S')"
+
+                  # 1. 触发异步工作流
+                  echo "🚀 Triggering workflow..."
+
+                  RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${API_BASE_URL}/workflow/run" \
+                    -H "Authorization: Bearer ${BEARER_TOKEN}" \
+                    -H "Content-Type: application/json" \
+                    -d "{
+                      \"workflow_id\": \"${WORKFLOW_ID}\",
+                      \"is_async\": true
+                    }")
+
+                  HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+                  BODY=$(echo "$RESPONSE" | sed '$d')
+
+                  echo "📊 HTTP Status: $HTTP_CODE"
+                  echo "📄 Raw Response:"
+                  echo "----------------------------------------"
+                  echo "$BODY"
+                  echo "----------------------------------------"
+                  echo ""
+                  echo "📝 Formatted Response:"
+                  echo "$BODY" | python3 -m json.tool 2>/dev/null || echo "$BODY"
+                  echo "----------------------------------------"
+
+                  if [ "$HTTP_CODE" != "200" ]; then
+                    echo "❌ Failed to trigger workflow. HTTP code: $HTTP_CODE"
+                    exit 1
+                  fi
+
+                  # 解析 execute_id (根据实际返回结构，execute_id 在顶层)
+                  EXECUTE_ID=$(echo "$BODY" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('execute_id', data.get('data', {}).get('execute_id', '')))" 2>/dev/null || echo "")
+
+                  if [ -z "$EXECUTE_ID" ]; then
+                    echo "❌ Failed to extract execute_id from response"
+                    echo "$BODY"
+                    exit 1
+                  fi
+
+                  echo "✅ Workflow triggered successfully"
+                  echo "🔑 Execute ID: $EXECUTE_ID"
+                  echo ""
+                  echo "ℹ️  Workflow is running asynchronously"
+                  echo "🔗 Check status at: ${API_BASE_URL}/workflows/${WORKFLOW_ID}/run_histories/${EXECUTE_ID}"
+
+                  exit 0
+              env:
+                - name: TZ
+                  value: Asia/Shanghai
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 200m
+                  memory: 256Mi

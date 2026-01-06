@@ -12,7 +12,6 @@ from app.schemas.hotspot import (
     PlatformInfo,
     BusinessReportContent,
     PushQueueItem,
-    CrawlTaskInfo,
 )
 import json
 
@@ -685,6 +684,7 @@ class HotspotService:
         keyword: Optional[str] = None,
         similarity_search: Optional[str] = None,
         similarity_threshold: float = 0.7,
+        hours: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         列出热点（分页）
@@ -696,6 +696,7 @@ class HotspotService:
             keyword: 关键词模糊搜索
             similarity_search: 相似度搜索关键词
             similarity_threshold: 相似度阈值 (0.0-1.0)
+            hours: 时间范围（小时），过滤最近更新的热点
 
         Returns:
             包含 total, page, page_size, items 的字典
@@ -718,6 +719,12 @@ class HotspotService:
                 if status:
                     conditions.append(f"status = ${param_idx}")
                     params.append(status.value)
+                    param_idx += 1
+
+                # 添加时间过滤
+                if hours:
+                    conditions.append(f"updated_at >= NOW() - INTERVAL '${param_idx} hours'")
+                    params.append(hours)
                     param_idx += 1
 
                 where_clause = " AND ".join(conditions) if conditions else "1=1"
@@ -758,6 +765,12 @@ class HotspotService:
                         f"(keyword ILIKE ${param_idx} OR normalized_keyword ILIKE ${param_idx})"
                     )
                     params.append(f"%{keyword}%")
+                    param_idx += 1
+
+                # 添加时间过滤
+                if hours:
+                    conditions.append(f"updated_at >= NOW() - INTERVAL '${param_idx} hours'")
+                    params.append(hours)
                     param_idx += 1
 
                 where_clause = " AND ".join(conditions) if conditions else "1=1"
@@ -1443,71 +1456,6 @@ class HotspotService:
                 "total_tasks": len(task_ids),
                 "platforms": platforms,
             }
-
-    async def get_hotspot_crawl_status(
-        self, hotspot_id: int, mysql_conn
-    ) -> Dict[str, Any]:
-        """
-        获取热点的爬取状态
-
-        Args:
-            hotspot_id: 热点ID
-            mysql_conn: MySQL 数据库连接
-
-        Returns:
-            包含热��信息和所有相关爬虫任务的状态
-        """
-        from app.db.task_repo import TaskRepository
-
-        async with vector_session.pg_pool.acquire() as conn:
-            # 获取热点信息
-            hotspot = await conn.fetchrow(
-                "SELECT id, keyword, status FROM hotspots WHERE id = $1",
-                hotspot_id,
-            )
-
-            if not hotspot:
-                raise ValueError(f"热点 {hotspot_id} 不存在")
-
-        # 获取所有相关的爬虫任务
-        repo = TaskRepository(mysql_conn)
-        tasks = await repo.get_tasks_by_hotspot_id(hotspot_id)
-
-        # 统计任务状态
-        completed_tasks = sum(1 for t in tasks if t.status == "SUCCESS")
-        failed_tasks = sum(1 for t in tasks if t.status == "FAILURE")
-        pending_tasks = sum(
-            1 for t in tasks if t.status in ["PENDING", "STARTED", "PROGRESS"]
-        )
-
-        # 转换为返回格式
-        task_infos = [
-            CrawlTaskInfo(
-                task_id=t.task_id,
-                platform=t.platform,
-                status=t.status,
-                progress_current=t.progress_current,
-                progress_total=t.progress_total,
-                progress_percentage=t.progress_percentage,
-                error=t.error,
-                started_at=t.started_at,
-                finished_at=t.finished_at,
-                created_at=t.created_at,
-            )
-            for t in tasks
-        ]
-
-        return {
-            "success": True,
-            "hotspot_id": hotspot_id,
-            "hotspot_keyword": hotspot["keyword"],
-            "hotspot_status": HotspotStatus(hotspot["status"]),
-            "tasks": task_infos,
-            "total_tasks": len(tasks),
-            "completed_tasks": completed_tasks,
-            "failed_tasks": failed_tasks,
-            "pending_tasks": pending_tasks,
-        }
 
     async def list_crawled_hotspots(
         self, page: int = 1, page_size: int = 20

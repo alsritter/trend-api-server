@@ -9,6 +9,7 @@ async function main({ params }: Args): Promise<Output> {
     const platformData = params.platformData;
     const includeComments = params.includeComments !== false; // 默认 true
     const maxCommentsPerContent = params.maxCommentsPerContent || 10;
+    const maxContents = params.maxContents || 10; // 默认最多输出 10 个帖子
 
     // 平台映射
     const platformMap = {
@@ -25,13 +26,31 @@ async function main({ params }: Args): Promise<Output> {
     let totalContents = 0;
     let totalComments = 0;
 
+    // 计算每个平台应该分配的内容数量
+    let totalProcessedContents = 0;
+
     // 遍历每个平台
     platformData.forEach((platform, platformIndex) => {
         totalContents += platform.total_contents;
         totalComments += platform.total_comments;
 
+        // 如果已经达到最大内容数，跳过后续平台
+        if (totalProcessedContents >= maxContents) {
+            return;
+        }
+
+        // 计算当前平台可以显示的内容数量
+        const maxAllowed = Math.min(
+            maxContents - totalProcessedContents,
+            platform.contents.length
+        );
+
+        // 限制每个平台的内容数量
+        const contentsToShow = platform.contents.slice(0, maxAllowed);
+        totalProcessedContents += contentsToShow.length;
+
         // 遍历每个内容
-        platform.contents.forEach((content, contentIndex) => {
+        contentsToShow.forEach((content, contentIndex) => {
             let contentText = '';
             
             // 平台和基本信息
@@ -113,11 +132,7 @@ async function main({ params }: Args): Promise<Output> {
     // 构建返回对象
     const ret = {
         contentTextArray: contentTextArray,
-        summary: {
-            totalPlatforms: platformData.length,
-            totalContents: totalContents,
-            totalComments: totalComments
-        }
+        mergedText: contentTextArray.join('\n=============\n')
     };
 
     return ret;
