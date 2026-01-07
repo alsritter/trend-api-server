@@ -1,10 +1,10 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: coze-workflow-trigger-step3
+  name: coze-workflow-trigger-step2
   namespace: lazygpt-pro
 spec:
-  schedule: "0 0-1,9-23 * * *"
+  schedule: "40 6-23 * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
@@ -15,7 +15,7 @@ spec:
       template:
         metadata:
           labels:
-            app: coze-workflow-trigger-step3
+            app: coze-workflow-trigger-step2
         spec:
           restartPolicy: OnFailure
           containers:

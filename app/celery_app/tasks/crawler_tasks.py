@@ -141,18 +141,6 @@ def parse_crawler_progress(line: str, platform: str) -> dict:
     return result
 
 
-def get_event_loop():
-    """获取或创建事件循环"""
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_closed():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    return loop
-
 
 async def update_task_status_async(task_id: str, **kwargs):
     """异步更新任务状态到数据库"""
@@ -173,8 +161,10 @@ async def update_task_status_async(task_id: str, **kwargs):
 
 def update_task_status_sync(task_id: str, **kwargs):
     """同步方式更新任务状态（在 Celery worker 中调用）"""
-    loop = get_event_loop()
-    loop.run_until_complete(update_task_status_async(task_id, **kwargs))
+    try:
+        asyncio.run(update_task_status_async(task_id, **kwargs))
+    except Exception as e:
+        logger.error(f"tasks.run_crawler[{task_id}]: Failed to update task status: {e}")
 
 
 async def update_hotspot_status_async(hotspot_id: str):
@@ -239,8 +229,10 @@ async def update_hotspot_status_async(hotspot_id: str):
 
 def update_hotspot_status_on_crawl_complete(hotspot_id: str):
     """同步方式更新热点状态（在 Celery worker 中调用）"""
-    loop = get_event_loop()
-    loop.run_until_complete(update_hotspot_status_async(hotspot_id))
+    try:
+        asyncio.run(update_hotspot_status_async(hotspot_id))
+    except Exception as e:
+        logger.error(f"tasks.run_crawler: Failed to update hotspot status: {e}")
 
 
 class CrawlerTask(Task):
@@ -505,9 +497,8 @@ def run_crawler(
 
             while not stop_polling.is_set():
                 try:
-                    # 使用事件循环加载 checkpoint
-                    loop = get_event_loop()
-                    checkpoint = loop.run_until_complete(
+                    # 使用 asyncio.run() 加载 checkpoint
+                    checkpoint = asyncio.run(
                         checkpoint_manager.load_checkpoint(
                             platform=platform,
                             mode=crawler_type,
