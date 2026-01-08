@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
+from typing import Optional, List
 import logging
 import traceback
 from app.services.cluster_service import cluster_service
@@ -54,14 +55,33 @@ async def create_cluster(request: CreateClusterRequest):
 
 
 @router.get("", response_model=ListClustersResponse)
-async def list_clusters():
+async def list_clusters(
+    status: Optional[str] = Query(None, description="状态过滤，逗号分隔，如: pending_validation,validated"),
+    exclude_status: Optional[str] = Query(None, description="排除状态，逗号分隔，如: archived,outdated"),
+    platforms: Optional[str] = Query(None, description="平台过滤，逗号分隔，如: xhs,dy,bili"),
+    start_time: Optional[str] = Query(None, description="开始时间过滤 (ISO格式)"),
+    end_time: Optional[str] = Query(None, description="结束时间过滤 (ISO格式)"),
+):
     """
     列出所有聚簇
 
-    返回所有聚簇的基本信息
+    支持过滤：
+    - status: 按热点状态过滤（逗号分隔）
+    - exclude_status: 排除指定状态（逗号分隔）
+    - platforms: 按平台过滤（逗号分隔）
+    - start_time/end_time: 按时间范围过滤
     """
     try:
-        items = await cluster_service.list_clusters()
+        platform_list = platforms.split(",") if platforms else None
+        status_list = status.split(",") if status else None
+        exclude_status_list = exclude_status.split(",") if exclude_status else None
+        items = await cluster_service.list_clusters(
+            status=status_list,
+            exclude_status=exclude_status_list,
+            platforms=platform_list,
+            start_time=start_time,
+            end_time=end_time,
+        )
         return ListClustersResponse(success=True, items=items, count=len(items))
     except Exception as e:
         logger.error(

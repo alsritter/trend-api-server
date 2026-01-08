@@ -307,6 +307,13 @@ class LinkHotspotResponse(BaseModel):
 
 
 # ==================== 聚簇管理相关 ====================
+class PlatformStat(BaseModel):
+    """平台统计信息"""
+
+    platform: str = Field(..., description="平台名称")
+    count: int = Field(..., description="该平台的热点数量")
+
+
 class ClusterInfo(BaseModel):
     """聚簇信息"""
 
@@ -323,6 +330,9 @@ class ClusterInfo(BaseModel):
         default_factory=list, description="聚簇中所有热点的状态列表"
     )
     last_hotspot_update: datetime = Field(..., description="聚簇中热点的最后更新时间")
+    platforms: List[PlatformStat] = Field(
+        default_factory=list, description="聚簇中包含的平台统计信息"
+    )
 
 
 class ListClustersResponse(BaseModel):

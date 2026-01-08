@@ -29,8 +29,20 @@ export const clustersApi = {
   /**
    * 列出所有聚簇
    */
-  list: async (): Promise<ListClustersResponse> => {
-    return apiClient.get(BASE_PATH);
+  list: async (params?: {
+    status?: string;
+    platforms?: string;
+    start_time?: string;
+    end_time?: string;
+  }): Promise<ListClustersResponse> => {
+    const queryParams = new URLSearchParams();
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.platforms) queryParams.append('platforms', params.platforms);
+    if (params?.start_time) queryParams.append('start_time', params.start_time);
+    if (params?.end_time) queryParams.append('end_time', params.end_time);
+    
+    const url = queryParams.toString() ? `${BASE_PATH}?${queryParams}` : BASE_PATH;
+    return apiClient.get(url);
   },
 
   /**

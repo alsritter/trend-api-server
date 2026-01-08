@@ -545,6 +545,12 @@ export interface LinkHotspotResponse {
 
 // ==================== 聚簇管理相关类型 ====================
 
+// 平台统计信息
+export interface PlatformStat {
+  platform: string;
+  count: number;
+}
+
 // 聚簇信息
 export interface ClusterInfo {
   id: number;
@@ -555,6 +561,7 @@ export interface ClusterInfo {
   updated_at: string;
   statuses: string[];
   last_hotspot_update: string;
+  platforms: PlatformStat[];
 }
 
 // 列出聚簇响应

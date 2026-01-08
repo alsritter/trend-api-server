@@ -1,837 +1,552 @@
 import {
   Card,
-  Tree,
   Table,
   Space,
   Button,
   message,
-  Drawer,
-  Typography,
-  Descriptions,
   Tag,
-  Modal,
   Input,
   Select,
-  Checkbox,
   DatePicker,
-  Dropdown
-} from "antd";
-const { Text } = Typography;
+  Tooltip,
+  Drawer,
+  Descriptions,
+  Modal,
+  Form,
+} from 'antd';
 import {
   ReloadOutlined,
-  DeleteOutlined,
+  SearchOutlined,
   EditOutlined,
-  MergeCellsOutlined,
-  SwapOutlined,
-  PlusOutlined,
-  FilterOutlined
-} from "@ant-design/icons";
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { clustersApi } from "@/api/clusters";
-import { hotspotsApi } from "@/api/hotspots";
-import type { ClusterInfo, HotspotDetail } from "@/types/api";
-import type { DataNode } from "antd/es/tree";
-import { STATUS_MAP } from "./components/HotspotTableColumns";
-import type { Dayjs } from "dayjs";
+  DeleteOutlined,
+  EyeOutlined,
+  FilterOutlined,
+} from '@ant-design/icons';
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { clustersApi } from '@/api/clusters';
+import { hotspotsApi } from '@/api/hotspots';
+import type { ClusterInfo, HotspotDetail } from '@/types/api';
+import type { ColumnsType } from 'antd/es/table';
+import type { Dayjs } from 'dayjs';
+import dayjs from 'dayjs';
+
+const { RangePicker } = DatePicker;
+
+// 状态映射
+const STATUS_MAP: Record<string, { label: string; color: string }> = {
+  pending_validation: { label: '待验证', color: 'orange' },
+  validated: { label: '已验证', color: 'green' },
+  rejected: { label: '已拒绝', color: 'red' },
+  crawling: { label: '爬取中', color: 'blue' },
+  crawled: { label: '已爬取', color: 'cyan' },
+  analyzing: { label: '分析中', color: 'purple' },
+  analyzed: { label: '已分析', color: 'geekblue' },
+  archived: { label: '已归档', color: 'default' },
+  outdated: { label: '已过时', color: 'volcano' },
+};
+
+// 平台映射
+const PLATFORM_MAP: Record<string, string> = {
+  xhs: '小红书',
+  dy: '抖音',
+  bili: '哔哩哔哩',
+  weibo: '微博',
+  ks: '快手',
+  tieba: '贴吧',
+  zhihu: '知乎',
+};
 
 function Hotspots() {
   const queryClient = useQueryClient();
-  const [selectedClusterId, setSelectedClusterId] = useState<number | null>(
-    null
-  );
-  const [selectedHotspot, setSelectedHotspot] = useState<HotspotDetail | null>(
-    null
-  );
-  const [hotspotDetailVisible, setHotspotDetailVisible] = useState(false);
-  const [renameModalVisible, setRenameModalVisible] = useState(false);
-  const [newClusterName, setNewClusterName] = useState("");
-  const [mergeModalVisible, setMergeModalVisible] = useState(false);
-  const [selectedClusters, setSelectedClusters] = useState<number[]>([]);
-  const [moveHotspotModalVisible, setMoveHotspotModalVisible] = useState(false);
-  const [selectedHotspotIds, setSelectedHotspotIds] = useState<number[]>([]);
-  const [targetClusterId, setTargetClusterId] = useState<number | null>(null);
-  const [createClusterModalVisible, setCreateClusterModalVisible] =
-    useState(false);
-  const [createClusterName, setCreateClusterName] = useState("");
-  const [clusterSearchKeyword, setClusterSearchKeyword] = useState("");
-  const [filterStatusList, setFilterStatusList] = useState<string[]>([]);
-  const [filterDateRange, setFilterDateRange] = useState<
-    [Dayjs | null, Dayjs | null] | null
-  >(null);
+  const [expandedRowKeys, setExpandedRowKeys] = useState<number[]>([]);
+  
+  // 过滤条件状态
+  const [filterStatus, setFilterStatus] = useState<string[]>([]);
+  const [excludeStatus, setExcludeStatus] = useState<string[]>([]);
+  const [filterPlatforms, setFilterPlatforms] = useState<string[]>([]);
+  const [filterDateRange, setFilterDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
+  const [searchKeyword, setSearchKeyword] = useState<string>('');
 
-  // 获取所有聚簇
+  // 详情抽屉状态
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [selectedHotspot, setSelectedHotspot] = useState<HotspotDetail | null>(null);
+
+  // 编辑聚簇名称
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingCluster, setEditingCluster] = useState<ClusterInfo | null>(null);
+  const [form] = Form.useForm();
+
+  // 查询聚簇列表
   const {
     data: clustersData,
+    isLoading: clustersLoading,
     refetch: refetchClusters,
-    isLoading: clustersLoading
   } = useQuery({
-    queryKey: ["clusters", clusterSearchKeyword],
+    queryKey: ['clusters', filterStatus, excludeStatus, filterPlatforms, filterDateRange],
     queryFn: async () => {
-      const allClusters = await clustersApi.list();
-
-      // 如果有搜索词,使用相似度搜索过滤聚簇
-      if (clusterSearchKeyword.trim()) {
-        const searchResult = await hotspotsApi.list({
-          page: 1,
-          page_size: 1000,
-          similarity_search: clusterSearchKeyword.trim(),
-          similarity_threshold: 0.5
-        });
-
-        // 获取搜索到的热点所属的聚簇ID
-        const matchedClusterIds = new Set(
-          searchResult.items
-            .filter((h) => h.cluster_id !== null)
-            .map((h) => h.cluster_id!)
-        );
-
-        // 过滤出包含匹配热点的聚簇
-        return {
-          ...allClusters,
-          items: allClusters.items.filter((c) => matchedClusterIds.has(c.id))
-        };
-      }
-
-      return allClusters;
-    }
+      const params: any = {};
+      if (filterStatus.length > 0) params.status = filterStatus.join(',');
+      if (excludeStatus.length > 0) params.exclude_status = excludeStatus.join(',');
+      if (filterPlatforms.length > 0) params.platforms = filterPlatforms.join(',');
+      if (filterDateRange?.[0]) params.start_time = filterDateRange[0].toISOString();
+      if (filterDateRange?.[1]) params.end_time = filterDateRange[1].toISOString();
+      
+      return clustersApi.list(params);
+    },
   });
 
-  // 应用过滤条件
-  const filteredClusters =
-    clustersData?.items.filter((cluster: ClusterInfo) => {
-      // 状态过滤
-      if (filterStatusList.length > 0) {
-        const hasMatchingStatus = cluster.statuses.some((status) =>
-          filterStatusList.includes(status)
-        );
-        if (!hasMatchingStatus) return false;
-      }
+  // 查询聚簇下的热点
+  const getClusterHotspots = async (clusterId: number) => {
+    return hotspotsApi.getClusterHotspots(clusterId);
+  };
 
-      // 时间过滤
-      if (filterDateRange && filterDateRange[0] && filterDateRange[1]) {
-        const clusterTime = new Date(cluster.last_hotspot_update).getTime();
-        const startTime = filterDateRange[0].valueOf();
-        const endTime = filterDateRange[1].valueOf();
-        if (clusterTime < startTime || clusterTime > endTime) return false;
-      }
-
-      return true;
-    }) || [];
-
-  // 获取选中聚簇的热点
-  const { data: hotspotsData, isLoading: hotspotsLoading } = useQuery({
-    queryKey: ["cluster-hotspots", selectedClusterId],
-    queryFn: () =>
-      selectedClusterId
-        ? clustersApi.getHotspots(selectedClusterId)
-        : Promise.resolve(null),
-    enabled: !!selectedClusterId
+  // 更新聚簇名称
+  const updateClusterMutation = useMutation({
+    mutationFn: ({ clusterId, clusterName }: { clusterId: number; clusterName: string }) =>
+      clustersApi.update(clusterId, { cluster_name: clusterName }),
+    onSuccess: () => {
+      message.success('聚簇名称更新成功');
+      setEditModalVisible(false);
+      setEditingCluster(null);
+      form.resetFields();
+      refetchClusters();
+    },
+    onError: (error: any) => {
+      message.error(`更新失败: ${error.message}`);
+    },
   });
 
   // 删除聚簇
   const deleteClusterMutation = useMutation({
-    mutationFn: clustersApi.delete,
+    mutationFn: (clusterId: number) => clustersApi.delete(clusterId),
     onSuccess: () => {
-      message.success("聚簇删除成功");
-      setSelectedClusterId(null);
+      message.success('聚簇删除成功');
       refetchClusters();
     },
     onError: (error: any) => {
       message.error(`删除失败: ${error.message}`);
-    }
+    },
   });
 
   // 删除热点
   const deleteHotspotMutation = useMutation({
-    mutationFn: hotspotsApi.delete,
+    mutationFn: (hotspotId: number) => hotspotsApi.delete(hotspotId),
     onSuccess: () => {
-      message.success("热点删除成功");
-      queryClient.invalidateQueries({
-        queryKey: ["cluster-hotspots", selectedClusterId]
-      });
+      message.success('热点删除成功');
+      queryClient.invalidateQueries({ queryKey: ['clusterHotspots'] });
       refetchClusters();
     },
     onError: (error: any) => {
       message.error(`删除失败: ${error.message}`);
-    }
-  });
-
-  // 重命名聚簇
-  const renameClusterMutation = useMutation({
-    mutationFn: ({
-      clusterId,
-      clusterName
-    }: {
-      clusterId: number;
-      clusterName: string;
-    }) => clustersApi.update(clusterId, { cluster_name: clusterName }),
-    onSuccess: () => {
-      message.success("聚簇重命名成功");
-      setRenameModalVisible(false);
-      setNewClusterName("");
-      refetchClusters();
     },
-    onError: (error: any) => {
-      message.error(`重命名失败: ${error.message}`);
-    }
   });
 
-  // 合并聚簇
-  const mergeClustersMutation = useMutation({
-    mutationFn: clustersApi.merge,
-    onSuccess: () => {
-      message.success("聚簇合并成功");
-      setMergeModalVisible(false);
-      setSelectedClusters([]);
-      setSelectedClusterId(null);
-      refetchClusters();
-    },
-    onError: (error: any) => {
-      message.error(`合并失败: ${error.message}`);
-    }
-  });
-
-  // 移动热点到聚簇
-  const moveHotspotMutation = useMutation({
-    mutationFn: ({
-      hotspotIds
-    }: {
-      hotspotIds: number[];
-      targetClusterId: number;
-    }) => clustersApi.split(selectedClusterId!, { hotspot_ids: hotspotIds }),
-    onSuccess: async (_, variables) => {
-      // 拆分后，将热点合并到目标聚簇
-      if (variables.targetClusterId) {
-        const newClusterId = await clustersApi
-          .list()
-          .then(
-            (res) =>
-              res.items.find(
-                (c) => !clustersData?.items.find((old) => old.id === c.id)
-              )?.id
-          );
-        if (newClusterId) {
-          await clustersApi.merge({
-            source_cluster_ids: [newClusterId, variables.targetClusterId]
-          });
-        }
-      }
-      message.success("热点移动成功");
-      setMoveHotspotModalVisible(false);
-      setSelectedHotspotIds([]);
-      setTargetClusterId(null);
-      queryClient.invalidateQueries({
-        queryKey: ["cluster-hotspots", selectedClusterId]
-      });
-      refetchClusters();
-    },
-    onError: (error: any) => {
-      message.error(`移动失败: ${error.message}`);
-    }
-  });
-
-  // 创建聚簇
-  const createClusterMutation = useMutation({
-    mutationFn: clustersApi.create,
-    onSuccess: () => {
-      message.success("聚簇创建成功");
-      setCreateClusterModalVisible(false);
-      setCreateClusterName("");
-      refetchClusters();
-    },
-    onError: (error: any) => {
-      message.error(`创建失败: ${error.message}`);
-    }
-  });
-
-  // 构建树形数据 - 重新设计聚簇项样式
-  const treeData: DataNode[] =
-    filteredClusters.map((cluster: ClusterInfo) => {
-      // 统计各状态的数量
-      const statusCounts = cluster.statuses.reduce((acc, status) => {
-        acc[status] = (acc[status] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>);
-
-      // 检查是否所有热点都是"已过滤"状态
-      const allFiltered =
-        cluster.statuses.length > 0 &&
-        cluster.statuses.every((status) => status === "filtered");
-
-      // 格式化时间
-      const updateTime = new Date(cluster.last_hotspot_update).toLocaleString(
-        "zh-CN",
-        {
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit"
-        }
-      );
-
-      return {
-        key: `cluster-${cluster.id}`,
-        title: (
-          <div style={{ padding: "4px 0" }}>
-            <div
-              style={{ display: "flex", alignItems: "center", marginBottom: 4 }}
-            >
-              <span style={{ fontWeight: 500 }}>{cluster.cluster_name}</span>
-              <span style={{ marginLeft: 8, color: "#666", fontSize: 12 }}>
-                ({cluster.member_count})
-              </span>
-              {allFiltered && (
-                <Tag
-                  color="orange"
-                  style={{
-                    marginLeft: 8,
-                    fontSize: 11,
-                    padding: "0 4px",
-                    height: 18,
-                    lineHeight: "18px"
-                  }}
-                >
-                  已过滤
-                </Tag>
-              )}
-            </div>
-            {/* 状态统计 */}
-            <div style={{ marginBottom: 4 }}>
-              <Space size={4}>
-                {Object.entries(statusCounts).map(([status, count]) => {
-                  const statusInfo =
-                    STATUS_MAP[status as keyof typeof STATUS_MAP];
-                  return statusInfo ? (
-                    <Tag
-                      key={status}
-                      color={statusInfo.color}
-                      style={{
-                        fontSize: 10,
-                        padding: "0 4px",
-                        height: 16,
-                        lineHeight: "16px",
-                        margin: 0
-                      }}
-                    >
-                      {statusInfo.label}: {count}
-                    </Tag>
-                  ) : null;
-                })}
-              </Space>
-            </div>
-            <div style={{ fontSize: 11, color: "#999" }}>{updateTime}</div>
-          </div>
-        ),
-        isLeaf: false,
-        cluster
-      };
-    }) || [];
-
-  // 选中聚簇
-  const handleSelect = (selectedKeys: React.Key[]) => {
-    if (selectedKeys.length > 0) {
-      const key = selectedKeys[0] as string;
-      if (key.startsWith("cluster-")) {
-        const clusterId = parseInt(key.replace("cluster-", ""));
-        setSelectedClusterId(clusterId);
-      }
-    }
-  };
-
-  // 查看热点详情
-  const handleViewHotspot = async (hotspot: HotspotDetail) => {
-    setSelectedHotspot(hotspot);
-    setHotspotDetailVisible(true);
-  };
-
-  // 删除聚簇
-  const handleDeleteCluster = () => {
-    if (!selectedClusterId) return;
-    Modal.confirm({
-      title: "确认删除",
-      content: "确定要删除该聚簇吗？聚簇下的所有热点将被解除关联。",
-      onOk: () => deleteClusterMutation.mutate(selectedClusterId)
-    });
-  };
-
-  // 重命名聚簇
-  const handleRenameCluster = () => {
-    if (!selectedClusterId) return;
-    const cluster = clustersData?.items.find(
-      (c: ClusterInfo) => c.id === selectedClusterId
-    );
-    if (cluster) {
-      setNewClusterName(cluster.cluster_name);
-      setRenameModalVisible(true);
-    }
-  };
-
-  // 创建聚簇
-  const handleCreateCluster = () => {
-    if (!createClusterName.trim()) {
-      message.warning("请输入聚簇名称");
-      return;
-    }
-    createClusterMutation.mutate({
-      cluster_name: createClusterName.trim()
-    });
-  };
-
-  // 删除热点
-  const handleDeleteHotspot = (hotspotId: number) => {
-    Modal.confirm({
-      title: "确认删除",
-      content: "确定要删除该热点吗？",
-      onOk: () => deleteHotspotMutation.mutate(hotspotId)
-    });
-  };
-
-  // 合并聚簇
-  const handleMergeClusters = () => {
-    if (selectedClusters.length < 2) {
-      message.warning("请至少选择2个聚簇进行合并");
-      return;
-    }
-    mergeClustersMutation.mutate({
-      source_cluster_ids: selectedClusters
-    });
-  };
-
-  // 移动热点到聚簇
-  const handleMoveHotspots = () => {
-    if (selectedHotspotIds.length === 0) {
-      message.warning("请至少选择一个热点");
-      return;
-    }
-    if (!targetClusterId) {
-      message.warning("请选择目标聚簇");
-      return;
-    }
-    moveHotspotMutation.mutate({
-      hotspotIds: selectedHotspotIds,
-      targetClusterId
-    });
-  };
-
-  // 热点表格行选择配置
-  const rowSelection = {
-    selectedRowKeys: selectedHotspotIds,
-    onChange: (selectedRowKeys: React.Key[]) => {
-      setSelectedHotspotIds(selectedRowKeys as number[]);
-    }
-  };
-
-  // 热点表格列
-  const columns = [
+  // 主表格列定义（聚簇）
+  const clusterColumns: ColumnsType<ClusterInfo> = [
     {
-      title: "ID",
-      dataIndex: "id",
-      key: "id",
-      width: 80
+      title: 'ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 80,
     },
     {
-      title: "关键词",
-      dataIndex: "keyword",
-      key: "keyword",
+      title: '聚簇名称',
+      dataIndex: 'cluster_name',
+      key: 'cluster_name',
       width: 200,
-      render: (text: string, record: HotspotDetail) => (
-        <a onClick={() => handleViewHotspot(record)}>{text}</a>
-      )
-    },
-    {
-      title: "状态",
-      dataIndex: "status",
-      key: "status",
-      width: 120,
-      render: (status: string) => {
-        const statusInfo = STATUS_MAP[status as keyof typeof STATUS_MAP];
-        return statusInfo ? (
-          <Tag color={statusInfo.color}>{statusInfo.label}</Tag>
-        ) : (
-          <Tag>{status}</Tag>
+      filteredValue: searchKeyword ? [searchKeyword] : null,
+      onFilter: (value, record) => {
+        const keyword = value as string;
+        return (
+          record.cluster_name.toLowerCase().includes(keyword.toLowerCase()) ||
+          record.keywords.some((k) => k.toLowerCase().includes(keyword.toLowerCase()))
         );
-      }
+      },
     },
     {
-      title: "出现次数",
-      dataIndex: "appearance_count",
-      key: "appearance_count",
-      width: 100
+      title: '热点数量',
+      dataIndex: 'member_count',
+      key: 'member_count',
+      width: 150,
+      sorter: (a, b) => a.member_count - b.member_count,
     },
     {
-      title: "首次出现",
-      dataIndex: "first_seen_at",
-      key: "first_seen_at",
-      width: 180,
-      render: (date: string) => new Date(date).toLocaleString()
-    },
-    {
-      title: "最后出现",
-      dataIndex: "last_seen_at",
-      key: "last_seen_at",
-      width: 180,
-      render: (date: string) => new Date(date).toLocaleString()
-    },
-    {
-      title: "爬取信息",
-      key: "crawl_info",
-      dataIndex: "crawl_info",
-      width: 120,
-      render: (_: any, record: HotspotDetail) => (
-        <Space direction="vertical" size={0}>
-          <Text style={{ fontSize: 12 }}>次数: {record.crawl_count}</Text>
-          {record.crawl_failed_count > 0 && (
-            <Text type="danger" style={{ fontSize: 12 }}>
-              失败: {record.crawl_failed_count}
-            </Text>
-          )}
+      title: '平台分布',
+      dataIndex: 'platforms',
+      key: 'platforms',
+      width: 250,
+      render: (platforms: ClusterInfo['platforms']) => (
+        <Space size={4} wrap>
+          {platforms.map((p) => (
+            <Tag key={p.platform} color="blue">
+              {PLATFORM_MAP[p.platform] || p.platform} ({p.count})
+            </Tag>
+          ))}
         </Space>
-      )
+      ),
     },
     {
-      title: "操作",
-      key: "actions",
-      width: 100,
-      render: (_: any, record: HotspotDetail) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => handleDeleteHotspot(record.id)}
-          >
-            删除
-          </Button>
+      title: '状态',
+      dataIndex: 'statuses',
+      key: 'statuses',
+      width: 200,
+      render: (statuses: string[]) => (
+        <Space size={4} wrap>
+          {statuses.map((status, idx) => {
+            const statusInfo = STATUS_MAP[status];
+            return (
+              <Tag key={idx} color={statusInfo?.color || 'default'}>
+                {statusInfo?.label || status}
+              </Tag>
+            );
+          })}
         </Space>
-      )
-    }
+      ),
+    },
+    {
+      title: '关键词',
+      dataIndex: 'keywords',
+      key: 'keywords',
+      width: 250,
+      ellipsis: { showTitle: false },
+      render: (keywords: string[]) => (
+        <Tooltip title={keywords.join(', ')}>
+          <span>{keywords.slice(0, 3).join(', ')}{keywords.length > 3 ? '...' : ''}</span>
+        </Tooltip>
+      ),
+    },
+    {
+      title: '最后更新',
+      dataIndex: 'last_hotspot_update',
+      key: 'last_hotspot_update',
+      width: 180,
+      sorter: (a, b) =>
+        new Date(a.last_hotspot_update).getTime() - new Date(b.last_hotspot_update).getTime(),
+      render: (date: string) => dayjs(date).format('YYYY-MM-DD HH:mm:ss'),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 150,
+      fixed: 'right',
+      render: (_, record) => (
+        <Space size="small">
+          <Tooltip title="编辑">
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditingCluster(record);
+                form.setFieldsValue({ cluster_name: record.cluster_name });
+                setEditModalVisible(true);
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="删除">
+            <Button
+              type="text"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                Modal.confirm({
+                  title: '确认删除',
+                  content: `确定要删除聚簇"${record.cluster_name}"吗？`,
+                  onOk: () => deleteClusterMutation.mutate(record.id),
+                });
+              }}
+            />
+          </Tooltip>
+        </Space>
+      ),
+    },
   ];
 
-  const selectedCluster = clustersData?.items.find(
-    (c: ClusterInfo) => c.id === selectedClusterId
-  );
+  // 展开的子表格列定义（热点）
+  const hotspotColumns: ColumnsType<HotspotDetail> = [
+    {
+      title: 'ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 80,
+    },
+    {
+      title: '关键词',
+      dataIndex: 'keyword',
+      key: 'keyword',
+      width: 200,
+    },
+    {
+      title: '标准化关键词',
+      dataIndex: 'normalized_keyword',
+      key: 'normalized_keyword',
+      width: 200,
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      key: 'status',
+      width: 120,
+      render: (status: string) => {
+        const statusInfo = STATUS_MAP[status];
+        return (
+          <Tag color={statusInfo?.color || 'default'}>
+            {statusInfo?.label || status}
+          </Tag>
+        );
+      },
+    },
+    {
+      title: '平台',
+      dataIndex: 'platforms',
+      key: 'platforms',
+      width: 200,
+      render: (platforms: HotspotDetail['platforms']) => (
+        <Space size={4} wrap>
+          {platforms.map((p, idx) => (
+            <Tag key={idx} color="blue">
+              {PLATFORM_MAP[p.platform] || p.platform}
+            </Tag>
+          ))}
+        </Space>
+      ),
+    },
+    {
+      title: '出现次数',
+      dataIndex: 'appearance_count',
+      key: 'appearance_count',
+      width: 100,
+    },
+    {
+      title: '首次出现',
+      dataIndex: 'first_seen_at',
+      key: 'first_seen_at',
+      width: 180,
+      render: (date: string) => dayjs(date).format('YYYY-MM-DD HH:mm:ss'),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 120,
+      fixed: 'right',
+      render: (_, record) => (
+        <Space size="small">
+          <Tooltip title="查看详情">
+            <Button
+              type="text"
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={() => {
+                setSelectedHotspot(record);
+                setDetailDrawerVisible(true);
+              }}
+            />
+          </Tooltip>
+          <Tooltip title="删除">
+            <Button
+              type="text"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => {
+                Modal.confirm({
+                  title: '确认删除',
+                  content: `确定要删除热点"${record.keyword}"吗？`,
+                  onOk: () => deleteHotspotMutation.mutate(record.id),
+                });
+              }}
+            />
+          </Tooltip>
+        </Space>
+      ),
+    },
+  ];
+
+  // 展开行渲染 - 使用缓存的热点数据
+  const renderExpandedRow = (record: ClusterInfo) => {
+    const hotspotsData = queryClient.getQueryData<any>(['clusterHotspots', record.id]);
+    return (
+      <Table
+        columns={hotspotColumns}
+        dataSource={hotspotsData?.items || []}
+        rowKey="id"
+        size="small"
+        pagination={false}
+        loading={!hotspotsData}
+      />
+    );
+  };
+
+  // 处理展开/收起
+  const handleExpand = async (expanded: boolean, record: ClusterInfo) => {
+    if (expanded) {
+      setExpandedRowKeys([...expandedRowKeys, record.id]);
+      try {
+        const data = await getClusterHotspots(record.id);
+        // 缓存数据到 react-query
+        queryClient.setQueryData(['clusterHotspots', record.id], data);
+      } catch (error: any) {
+        message.error(`加载热点数据失败: ${error.message}`);
+      }
+    } else {
+      setExpandedRowKeys(expandedRowKeys.filter((key) => key !== record.id));
+    }
+  };
+
+  // 重置过滤条件
+  const handleResetFilters = () => {
+    setFilterStatus([]);
+    setExcludeStatus([]);
+    setFilterPlatforms([]);
+    setFilterDateRange(null);
+    setSearchKeyword('');
+  };
 
   return (
-    <div style={{ padding: 24 }}>
-      <div style={{ display: "flex", gap: 16, height: "calc(100vh - 150px)" }}>
-        {/* 左侧：聚簇树 */}
-        <Card
-          title="热点聚簇"
-          style={{ width: 380, overflow: "auto" }}
-          extra={
-            <Space>
-              <Button
-                icon={<PlusOutlined />}
-                size="small"
-                onClick={() => setCreateClusterModalVisible(true)}
-                title="新建聚簇"
-              />
-              <Button
-                icon={<MergeCellsOutlined />}
-                size="small"
-                onClick={() => setMergeModalVisible(true)}
-                title="合并聚簇"
-              />
-              <Button
-                icon={<ReloadOutlined />}
-                size="small"
-                onClick={() => refetchClusters()}
-              />
-            </Space>
-          }
-        >
-          <div style={{ marginBottom: 12 }}>
-            <Input.Search
-              placeholder="搜索聚簇（相似度搜索）..."
-              allowClear
-              value={clusterSearchKeyword}
-              onChange={(e) => setClusterSearchKeyword(e.target.value)}
+    <div style={{ padding: '24px' }}>
+      <Card
+        title="热点聚簇管理"
+        extra={
+          <Space>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => refetchClusters()}
               loading={clustersLoading}
-              style={{ width: "100%" }}
-            />
-          </div>
-
-          {/* 过滤器 */}
-          <div
-            style={{
-              marginBottom: 12,
-              display: "flex",
-              gap: 8,
-              flexDirection: "column"
-            }}
-          >
-            <Dropdown
-              trigger={["click"]}
-              menu={{
-                items: []
-                // 使用自定义渲染
-              }}
-              dropdownRender={() => (
-                <div
-                  style={{
-                    background: "#fff",
-                    borderRadius: 4,
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-                    padding: 12,
-                    minWidth: 200
-                  }}
-                >
-                  <div
-                    style={{ marginBottom: 8, fontWeight: 500, fontSize: 12 }}
-                  >
-                    按状态过滤
-                  </div>
-                  <Checkbox.Group
-                    value={filterStatusList}
-                    onChange={(values) =>
-                      setFilterStatusList(values as string[])
-                    }
-                    style={{ display: "flex", flexDirection: "column", gap: 4 }}
-                  >
-                    {Object.entries(STATUS_MAP).map(([key, value]) => (
-                      <Checkbox key={key} value={key}>
-                        <Tag
-                          color={value.color}
-                          style={{ fontSize: 11, margin: 0 }}
-                        >
-                          {value.label}
-                        </Tag>
-                      </Checkbox>
-                    ))}
-                  </Checkbox.Group>
-                  <div style={{ marginTop: 8, display: "flex", gap: 4 }}>
-                    <Button
-                      size="small"
-                      onClick={() => setFilterStatusList([])}
-                    >
-                      清除
-                    </Button>
-                  </div>
-                </div>
-              )}
             >
-              <Button
-                icon={<FilterOutlined />}
-                size="small"
-                style={{ width: "100%" }}
-              >
-                状态过滤{" "}
-                {filterStatusList.length > 0 && `(${filterStatusList.length})`}
-              </Button>
-            </Dropdown>
-
-            <DatePicker.RangePicker
-              size="small"
-              placeholder={["开始时间", "结束时间"]}
-              style={{ width: "100%" }}
-              value={filterDateRange}
-              onChange={(dates) => setFilterDateRange(dates)}
-              showTime={{ format: "HH:mm" }}
-              format="YYYY-MM-DD HH:mm"
-            />
-          </div>
-
-          <Tree
-            showLine={false}
-            showIcon={false}
-            selectable
-            treeData={treeData}
-            onSelect={handleSelect}
-            selectedKeys={
-              selectedClusterId ? [`cluster-${selectedClusterId}`] : []
-            }
+              刷新
+            </Button>
+          </Space>
+        }
+      >
+        {/* 过滤器 */}
+        <Space style={{ marginBottom: 16 }} wrap>
+          <Input
+            placeholder="搜索聚簇名称或关键词"
+            prefix={<SearchOutlined />}
+            value={searchKeyword}
+            onChange={(e) => setSearchKeyword(e.target.value)}
+            style={{ width: 250 }}
+            allowClear
           />
-        </Card>
-
-        {/* 右侧：热点列表 */}
-        <Card
-          title={
-            selectedCluster
-              ? `${selectedCluster.cluster_name} - 热点列表`
-              : "请选择聚簇"
-          }
-          style={{ flex: 1, overflow: "auto" }}
-          extra={
-            selectedClusterId && (
-              <Space>
-                {selectedHotspotIds.length > 0 && (
-                  <Button
-                    icon={<SwapOutlined />}
-                    size="small"
-                    onClick={() => setMoveHotspotModalVisible(true)}
-                  >
-                    移动到聚簇
-                  </Button>
-                )}
-                <Button
-                  icon={<EditOutlined />}
-                  size="small"
-                  onClick={handleRenameCluster}
-                >
-                  重命名
-                </Button>
-                <Button
-                  icon={<DeleteOutlined />}
-                  size="small"
-                  danger
-                  onClick={handleDeleteCluster}
-                  loading={deleteClusterMutation.isPending}
-                >
-                  删除聚簇
-                </Button>
-              </Space>
-            )
-          }
-        >
-          {selectedClusterId ? (
-            <Table
-              rowSelection={rowSelection}
-              columns={columns}
-              dataSource={hotspotsData?.items || []}
-              rowKey="id"
-              loading={hotspotsLoading}
-              pagination={{
-                pageSize: 20,
-                showSizeChanger: true,
-                showTotal: (total) => `共 ${total} 条`
-              }}
-            />
-          ) : (
-            <div
-              style={{ textAlign: "center", padding: "60px 0", color: "#999" }}
-            >
-              请从左侧选择一个聚簇查看热点
-            </div>
-          )}
-        </Card>
-      </div>
-
-      {/* 合并聚簇弹窗 */}
-      <Modal
-        title="合并聚簇"
-        open={mergeModalVisible}
-        onOk={handleMergeClusters}
-        onCancel={() => {
-          setMergeModalVisible(false);
-          setSelectedClusters([]);
-        }}
-        okText="合并"
-        cancelText="取消"
-        confirmLoading={mergeClustersMutation.isPending}
-      >
-        <p>请选择要合并的聚簇（至少选择2个）：</p>
-        <div style={{ maxHeight: 400, overflowY: "auto" }}>
-          {clustersData?.items.map((cluster) => (
-            <div key={cluster.id} style={{ marginBottom: 8 }}>
-              <Checkbox
-                checked={selectedClusters.includes(cluster.id)}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setSelectedClusters([...selectedClusters, cluster.id]);
-                  } else {
-                    setSelectedClusters(
-                      selectedClusters.filter((id) => id !== cluster.id)
-                    );
-                  }
-                }}
-              >
-                {cluster.cluster_name} ({cluster.member_count} 个热点)
-              </Checkbox>
-            </div>
-          ))}
-        </div>
-      </Modal>
-
-      {/* 移动热点到聚簇弹窗 */}
-      <Modal
-        title="移动热点到聚簇"
-        open={moveHotspotModalVisible}
-        onOk={handleMoveHotspots}
-        onCancel={() => {
-          setMoveHotspotModalVisible(false);
-          setTargetClusterId(null);
-        }}
-        okText="移动"
-        cancelText="取消"
-        confirmLoading={moveHotspotMutation.isPending}
-      >
-        <p>已选择 {selectedHotspotIds.length} 个热点，请选择目标聚簇：</p>
-        <Select
-          style={{ width: "100%" }}
-          placeholder="选择目标聚簇"
-          value={targetClusterId}
-          onChange={setTargetClusterId}
-        >
-          {clustersData?.items
-            .filter((c) => c.id !== selectedClusterId)
-            .map((cluster) => (
-              <Select.Option key={cluster.id} value={cluster.id}>
-                {cluster.cluster_name} ({cluster.member_count} 个热点)
+          
+          <Select
+            mode="multiple"
+            placeholder="选择状态"
+            value={filterStatus}
+            onChange={setFilterStatus}
+            style={{ width: 250 }}
+            allowClear
+            maxTagCount="responsive"
+          >
+            {Object.entries(STATUS_MAP).map(([value, { label }]) => (
+              <Select.Option key={value} value={value}>
+                {label}
               </Select.Option>
             ))}
-        </Select>
-      </Modal>
+          </Select>
 
-      {/* 创建聚簇弹窗 */}
-      <Modal
-        title="创建新聚簇"
-        open={createClusterModalVisible}
-        onOk={handleCreateCluster}
-        onCancel={() => {
-          setCreateClusterModalVisible(false);
-          setCreateClusterName("");
-        }}
-        okText="创建"
-        cancelText="取消"
-        confirmLoading={createClusterMutation.isPending}
-      >
-        <p>请输入新聚簇的名称：</p>
-        <Input
-          placeholder="聚簇名称"
-          value={createClusterName}
-          onChange={(e) => setCreateClusterName(e.target.value)}
-          onPressEnter={handleCreateCluster}
+          <Select
+            mode="multiple"
+            placeholder="排除状态（反选）"
+            value={excludeStatus}
+            onChange={setExcludeStatus}
+            style={{ width: 250 }}
+            allowClear
+            maxTagCount="responsive"
+          >
+            {Object.entries(STATUS_MAP).map(([value, { label }]) => (
+              <Select.Option key={value} value={value}>
+                {label}
+              </Select.Option>
+            ))}
+          </Select>
+
+          <Select
+            mode="multiple"
+            placeholder="选择平台"
+            value={filterPlatforms}
+            onChange={setFilterPlatforms}
+            style={{ width: 250 }}
+            maxTagCount="responsive"
+          >
+            {Object.entries(PLATFORM_MAP).map(([value, label]) => (
+              <Select.Option key={value} value={value}>
+                {label}
+              </Select.Option>
+            ))}
+          </Select>
+
+          <RangePicker
+            value={filterDateRange}
+            onChange={setFilterDateRange}
+            showTime
+            format="YYYY-MM-DD HH:mm"
+            placeholder={['开始时间', '结束时间']}
+          />
+
+          <Button icon={<FilterOutlined />} onClick={handleResetFilters}>
+            重置过滤
+          </Button>
+        </Space>
+
+        {/* 主表格 */}
+        <Table
+          columns={clusterColumns}
+          dataSource={clustersData?.items || []}
+          rowKey="id"
+          loading={clustersLoading}
+          pagination={{
+            total: clustersData?.count || 0,
+            pageSize: 20,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total) => `共 ${total} 个聚簇`,
+          }}
+          expandable={{
+            expandedRowKeys,
+            onExpand: handleExpand,
+            expandedRowRender: renderExpandedRow,
+          }}
+          scroll={{ x: 1500 }}
         />
-      </Modal>
+      </Card>
 
       {/* 热点详情抽屉 */}
       <Drawer
         title="热点详情"
         placement="right"
         width={720}
-        open={hotspotDetailVisible}
+        open={detailDrawerVisible}
         onClose={() => {
-          setHotspotDetailVisible(false);
+          setDetailDrawerVisible(false);
           setSelectedHotspot(null);
         }}
       >
         {selectedHotspot && (
           <Descriptions column={1} bordered>
-            <Descriptions.Item label="关键词">
-              {selectedHotspot.keyword}
-            </Descriptions.Item>
+            <Descriptions.Item label="ID">{selectedHotspot.id}</Descriptions.Item>
+            <Descriptions.Item label="关键词">{selectedHotspot.keyword}</Descriptions.Item>
             <Descriptions.Item label="标准化关键词">
               {selectedHotspot.normalized_keyword}
             </Descriptions.Item>
             <Descriptions.Item label="状态">
               <Tag color={STATUS_MAP[selectedHotspot.status]?.color}>
-                {STATUS_MAP[selectedHotspot.status]?.label ||
-                  selectedHotspot.status}
+                {STATUS_MAP[selectedHotspot.status]?.label || selectedHotspot.status}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="聚簇ID">
-              {selectedHotspot.cluster_id}
-            </Descriptions.Item>
+            <Descriptions.Item label="聚簇ID">{selectedHotspot.cluster_id}</Descriptions.Item>
             <Descriptions.Item label="出现次数">
               {selectedHotspot.appearance_count}
             </Descriptions.Item>
             <Descriptions.Item label="首次出现">
-              {new Date(selectedHotspot.first_seen_at).toLocaleString()}
+              {dayjs(selectedHotspot.first_seen_at).format('YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
             <Descriptions.Item label="最后出现">
-              {new Date(selectedHotspot.last_seen_at).toLocaleString()}
+              {dayjs(selectedHotspot.last_seen_at).format('YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
             <Descriptions.Item label="向量模型">
               {selectedHotspot.embedding_model}
@@ -848,67 +563,69 @@ function Hotspots() {
                 {selectedHotspot.filter_reason}
               </Descriptions.Item>
             )}
-            {selectedHotspot.filtered_at && (
-              <Descriptions.Item label="过滤时间">
-                {new Date(selectedHotspot.filtered_at).toLocaleString()}
-              </Descriptions.Item>
-            )}
             <Descriptions.Item label="爬取次数">
               {selectedHotspot.crawl_count}
             </Descriptions.Item>
             {selectedHotspot.last_crawled_at && (
               <Descriptions.Item label="最后爬取时间">
-                {new Date(selectedHotspot.last_crawled_at).toLocaleString()}
-              </Descriptions.Item>
-            )}
-            {selectedHotspot.crawl_failed_count > 0 && (
-              <Descriptions.Item label="爬取失败次数">
-                {selectedHotspot.crawl_failed_count}
+                {dayjs(selectedHotspot.last_crawled_at).format('YYYY-MM-DD HH:mm:ss')}
               </Descriptions.Item>
             )}
             <Descriptions.Item label="平台信息">
-              {selectedHotspot.platforms.map((platform, index) => (
-                <div key={index} style={{ marginBottom: 8 }}>
-                  <Tag color="blue">{platform.platform}</Tag>
-                  排名: {platform.rank} | 热度: {platform.heat_score}
-                  <br />
-                  时间: {new Date(platform.seen_at).toLocaleString()}
-                </div>
-              ))}
+              <Space direction="vertical">
+                {selectedHotspot.platforms.map((platform, index) => (
+                  <div key={index}>
+                    <Tag color="blue">{PLATFORM_MAP[platform.platform] || platform.platform}</Tag>
+                    <span>排名: {platform.rank}</span>
+                    {platform.heat_score && <span> | 热度: {platform.heat_score}</span>}
+                    <br />
+                    <span style={{ color: '#999', fontSize: 12 }}>
+                      {dayjs(platform.seen_at).format('YYYY-MM-DD HH:mm:ss')}
+                    </span>
+                  </div>
+                ))}
+              </Space>
             </Descriptions.Item>
             <Descriptions.Item label="创建时间">
-              {new Date(selectedHotspot.created_at).toLocaleString()}
+              {dayjs(selectedHotspot.created_at).format('YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
             <Descriptions.Item label="更新时间">
-              {new Date(selectedHotspot.updated_at).toLocaleString()}
+              {dayjs(selectedHotspot.updated_at).format('YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
           </Descriptions>
         )}
       </Drawer>
 
-      {/* 重命名聚簇弹窗 */}
+      {/* 编辑聚簇名称弹窗 */}
       <Modal
-        title="重命名聚簇"
-        open={renameModalVisible}
+        title="编辑聚簇名称"
+        open={editModalVisible}
         onOk={() => {
-          if (selectedClusterId && newClusterName.trim()) {
-            renameClusterMutation.mutate({
-              clusterId: selectedClusterId,
-              clusterName: newClusterName.trim()
-            });
-          }
+          form.validateFields().then((values) => {
+            if (editingCluster) {
+              updateClusterMutation.mutate({
+                clusterId: editingCluster.id,
+                clusterName: values.cluster_name,
+              });
+            }
+          });
         }}
         onCancel={() => {
-          setRenameModalVisible(false);
-          setNewClusterName("");
+          setEditModalVisible(false);
+          setEditingCluster(null);
+          form.resetFields();
         }}
-        confirmLoading={renameClusterMutation.isPending}
+        confirmLoading={updateClusterMutation.isPending}
       >
-        <Input
-          placeholder="请输入新的聚簇名称"
-          value={newClusterName}
-          onChange={(e) => setNewClusterName(e.target.value)}
-        />
+        <Form form={form} layout="vertical">
+          <Form.Item
+            name="cluster_name"
+            label="聚簇名称"
+            rules={[{ required: true, message: '请输入聚簇名称' }]}
+          >
+            <Input placeholder="请输入聚簇名称" />
+          </Form.Item>
+        </Form>
       </Modal>
     </div>
   );

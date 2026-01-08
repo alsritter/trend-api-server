@@ -15,6 +15,7 @@ import type {
   LinkHotspotRequest,
   LinkHotspotResponse,
   HotspotDetail,
+  GetClusterHotspotsResponse,
 } from '@/types/api';
 
 const BASE_PATH = '/api/v1/hotspots';
@@ -87,5 +88,12 @@ export const hotspotsApi = {
    */
   link: async (data: LinkHotspotRequest): Promise<LinkHotspotResponse> => {
     return apiClient.post(`${BASE_PATH}/link`, data);
+  },
+
+  /**
+   * 获取聚簇下的所有热点
+   */
+  getClusterHotspots: async (clusterId: number): Promise<GetClusterHotspotsResponse> => {
+    return apiClient.get(`${BASE_PATH}/cluster/${clusterId}/hotspots`);
   },
 };
