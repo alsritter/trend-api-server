@@ -171,6 +171,21 @@ export function ClustersTable({
         onExpand: onExpandChange,
         expandedRowRender: renderExpandedRow
       }}
+      onRow={(record) => ({
+        onClick: (e) => {
+          // 阻止点击操作按钮时触发行点击
+          const target = e.target as HTMLElement;
+          if (
+            target.closest('.ant-btn') || 
+            target.closest('.ant-checkbox-wrapper')
+          ) {
+            return;
+          }
+          const isExpanded = expandedRowKeys.includes(record.id);
+          onExpandChange(!isExpanded, record);
+        },
+        style: { cursor: 'pointer' }
+      })}
       scroll={{ x: 1500 }}
     />
   );

@@ -3,12 +3,12 @@ import { ReloadOutlined, MergeCellsOutlined } from "@ant-design/icons";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { clustersApi } from "@/api/clusters";
-import type { ClusterInfo, HotspotDetail } from "@/types/api";
+import type { ClusterInfo } from "@/types/api";
 import type { Dayjs } from "dayjs";
 import { HotspotsFilter } from "./HotspotsFilter";
 import { ClustersTable } from "./ClustersTable";
 import { ClusterExpandedRow } from "./ClusterExpandedRow";
-import { HotspotDetailDrawer } from "./HotspotDetailDrawer";
+
 import { EditClusterModal } from "./EditClusterModal";
 import { MergeClustersModal } from "./MergeClustersModal";
 
@@ -23,12 +23,6 @@ function Hotspots() {
     [Dayjs | null, Dayjs | null] | null
   >(null);
   const [searchKeyword, setSearchKeyword] = useState<string>("");
-
-  // 详情抽屉状态
-  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
-  const [selectedHotspot, setSelectedHotspot] = useState<HotspotDetail | null>(
-    null
-  );
 
   // 编辑聚簇名称
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -167,18 +161,6 @@ function Hotspots() {
     setEditingCluster(null);
   };
 
-  // 处理查看热点详情
-  const handleViewHotspotDetail = (hotspot: HotspotDetail) => {
-    setSelectedHotspot(hotspot);
-    setDetailDrawerVisible(true);
-  };
-
-  // 处理关闭详情抽屉
-  const handleCloseDetailDrawer = () => {
-    setDetailDrawerVisible(false);
-    setSelectedHotspot(null);
-  };
-
   // 处理行选择
   const handleSelectChange = (
     selectedKeys: React.Key[],
@@ -259,19 +241,10 @@ function Hotspots() {
           onDelete={handleDelete}
           onSelectChange={handleSelectChange}
           renderExpandedRow={(record) => (
-            <ClusterExpandedRow
-              clusterId={record.id}
-              onViewDetail={handleViewHotspotDetail}
-            />
+            <ClusterExpandedRow clusterId={record.id} />
           )}
         />
       </Card>
-
-      <HotspotDetailDrawer
-        visible={detailDrawerVisible}
-        hotspot={selectedHotspot}
-        onClose={handleCloseDetailDrawer}
-      />
 
       <EditClusterModal
         visible={editModalVisible}

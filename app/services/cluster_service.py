@@ -56,12 +56,15 @@ class ClusterService:
                 param_counter += len(exclude_status)
 
             if platforms:
-                # 平台过滤：检查热点的 platforms 字段
+                # 平台过滤：使用 JSONB 操作符检查 platforms 数组中是否存在指定平台
+                # platforms 是一个 JSONB 数组，每个元素包含 platform 字段
+                # 使用 EXISTS 子查询检查数组中是否有匹配的 platform
                 platform_conditions = " OR ".join(
-                    [f"h.platforms::text LIKE ${param_counter + i}" for i in range(len(platforms))]
+                    [f"EXISTS (SELECT 1 FROM jsonb_array_elements(h.platforms) AS p WHERE p->>'platform' = ${param_counter + i})" 
+                     for i in range(len(platforms))]
                 )
                 conditions.append(f"({platform_conditions})")
-                params.extend([f'%"{platform}"%' for platform in platforms])
+                params.extend(platforms)
                 param_counter += len(platforms)
 
             if start_time:

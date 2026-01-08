@@ -133,22 +133,34 @@ class HotspotService:
             )
 
             if existing_hotspot:
-                # 更新现有热点
+                # 更新现有热点的 AI 分析信息
                 await conn.execute(
                     """
                     UPDATE hotspots
                     SET last_seen_at = CURRENT_TIMESTAMP,
                         appearance_count = appearance_count + 1,
-                        updated_at = CURRENT_TIMESTAMP
+                        updated_at = CURRENT_TIMESTAMP,
+                        tags = $2,
+                        confidence = $3,
+                        opportunities = $4,
+                        reasoning_keep = $5,
+                        reasoning_risk = $6,
+                        primary_category = $7
                     WHERE id = $1
                     """,
                     existing_hotspot["id"],
+                    analysis.tags if analysis.tags else [],
+                    analysis.confidence,
+                    analysis.opportunities if analysis.opportunities else [],
+                    analysis.reasoning.keep if analysis.reasoning.keep else [],
+                    analysis.reasoning.risk if analysis.reasoning.risk else [],
+                    analysis.primary_category,
                 )
 
                 return {
                     "hotspot_id": existing_hotspot["id"],
                     "action": "updated",
-                    "message": f"热点 '{analysis.title}' 已更新出现次数",
+                    "message": f"热点 '{analysis.title}' 已更新（包括 AI 分析信息）",
                 }
 
             # 创建新热点
@@ -736,7 +748,9 @@ class HotspotService:
 
                 # 添加时间过滤
                 if hours:
-                    conditions.append(f"updated_at >= NOW() - INTERVAL '1 hour' * ${param_idx}")
+                    conditions.append(
+                        f"updated_at >= NOW() - INTERVAL '1 hour' * ${param_idx}"
+                    )
                     params.append(hours)
                     param_idx += 1
 
@@ -782,7 +796,9 @@ class HotspotService:
 
                 # 添加时间过滤
                 if hours:
-                    conditions.append(f"last_seen_at >= NOW() - INTERVAL '1 hour' * ${param_idx}")
+                    conditions.append(
+                        f"last_seen_at >= NOW() - INTERVAL '1 hour' * ${param_idx}"
+                    )
                     params.append(hours)
                     param_idx += 1
 

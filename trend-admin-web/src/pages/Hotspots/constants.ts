@@ -13,11 +13,11 @@ export const STATUS_MAP: Record<string, { label: string; color: string }> = {
 
 // 平台映射
 export const PLATFORM_MAP: Record<string, string> = {
-  xhs: "小红书",
-  dy: "抖音",
-  bili: "哔哩哔哩",
-  weibo: "微博",
-  ks: "快手",
-  tieba: "贴吧",
-  zhihu: "知乎"
+  小红书: "小红书",
+  抖音: "抖音",
+  哔哩哔哩: "哔哩哔哩",
+  微博: "微博",
+  快手: "快手",
+  贴吧: "贴吧",
+  知乎: "知乎"
 };
