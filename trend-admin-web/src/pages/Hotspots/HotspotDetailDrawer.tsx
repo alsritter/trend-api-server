@@ -1,7 +1,9 @@
-import { Drawer, Descriptions, Tag, Space } from "antd";
+import { Drawer, Descriptions, Tag, Space, Card, Typography } from "antd";
 import type { HotspotDetail } from "@/types/api";
 import dayjs from "dayjs";
 import { STATUS_MAP, PLATFORM_MAP } from "./constants";
+
+const { Text } = Typography;
 
 interface HotspotDetailDrawerProps {
   visible: boolean;
@@ -18,7 +20,7 @@ export function HotspotDetailDrawer({
     <Drawer
       title="热点详情"
       placement="right"
-      width={720}
+      width={800}
       open={visible}
       onClose={onClose}
     >
@@ -36,8 +38,79 @@ export function HotspotDetailDrawer({
               {STATUS_MAP[hotspot.status]?.label || hotspot.status}
             </Tag>
           </Descriptions.Item>
+          
+          {/* AI 分析信息 */}
+          {hotspot.primary_category && (
+            <Descriptions.Item label="主要分类">
+              <Tag color="blue">{hotspot.primary_category}</Tag>
+            </Descriptions.Item>
+          )}
+          
+          {hotspot.confidence !== undefined && hotspot.confidence !== null && (
+            <Descriptions.Item label="置信度">
+              <Text type={hotspot.confidence >= 0.8 ? "success" : hotspot.confidence >= 0.5 ? "warning" : "danger"}>
+                {(hotspot.confidence * 100).toFixed(1)}%
+              </Text>
+            </Descriptions.Item>
+          )}
+          
+          {hotspot.tags && hotspot.tags.length > 0 && (
+            <Descriptions.Item label="标签">
+              <Space wrap>
+                {hotspot.tags.map((tag, idx) => (
+                  <Tag key={idx} color="cyan">{tag}</Tag>
+                ))}
+              </Space>
+            </Descriptions.Item>
+          )}
+          
+          {hotspot.platform_url && (
+            <Descriptions.Item label="平台链接">
+              <a href={hotspot.platform_url} target="_blank" rel="noopener noreferrer">
+                查看原文
+              </a>
+            </Descriptions.Item>
+          )}
+          
+          {hotspot.opportunities && hotspot.opportunities.length > 0 && (
+            <Descriptions.Item label="初筛机会">
+              <Space direction="vertical" style={{ width: "100%" }}>
+                {hotspot.opportunities.map((opp, idx) => (
+                  <Card key={idx} size="small" style={{ backgroundColor: "#f0f9ff" }}>
+                    💡 {opp}
+                  </Card>
+                ))}
+              </Space>
+            </Descriptions.Item>
+          )}
+          
+          {hotspot.reasoning_keep && hotspot.reasoning_keep.length > 0 && (
+            <Descriptions.Item label="保留原因">
+              <Space direction="vertical" style={{ width: "100%" }}>
+                {hotspot.reasoning_keep.map((reason, idx) => (
+                  <Card key={idx} size="small" style={{ backgroundColor: "#f6ffed" }}>
+                    ✓ {reason}
+                  </Card>
+                ))}
+              </Space>
+            </Descriptions.Item>
+          )}
+          
+          {hotspot.reasoning_risk && hotspot.reasoning_risk.length > 0 && (
+            <Descriptions.Item label="风险提示">
+              <Space direction="vertical" style={{ width: "100%" }}>
+                {hotspot.reasoning_risk.map((risk, idx) => (
+                  <Card key={idx} size="small" style={{ backgroundColor: "#fff1f0" }}>
+                    ⚠ {risk}
+                  </Card>
+                ))}
+              </Space>
+            </Descriptions.Item>
+          )}
+          
+          {/* 基础信息 */}
           <Descriptions.Item label="聚簇ID">
-            {hotspot.cluster_id}
+            {hotspot.cluster_id || "未分组"}
           </Descriptions.Item>
           <Descriptions.Item label="出现次数">
             {hotspot.appearance_count}

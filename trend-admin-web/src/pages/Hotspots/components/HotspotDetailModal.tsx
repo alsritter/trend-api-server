@@ -29,7 +29,7 @@ export const HotspotDetailModal = ({
       open={visible}
       onCancel={onClose}
       footer={null}
-      width={800}
+      width={900}
     >
       <Descriptions bordered column={2} size="small">
         <Descriptions.Item label="ID">{hotspot.id}</Descriptions.Item>
@@ -42,6 +42,77 @@ export const HotspotDetailModal = ({
             {STATUS_MAP[hotspot.status]?.label || hotspot.status}
           </Tag>
         </Descriptions.Item>
+        
+        {/* AI 分析信息区域 */}
+        {hotspot.primary_category && (
+          <Descriptions.Item label="主要分类" span={2}>
+            <Tag color="blue">{hotspot.primary_category}</Tag>
+          </Descriptions.Item>
+        )}
+        
+        {hotspot.confidence !== undefined && hotspot.confidence !== null && (
+          <Descriptions.Item label="置信度">
+            <Text type={hotspot.confidence >= 0.8 ? "success" : hotspot.confidence >= 0.5 ? "warning" : "danger"}>
+              {(hotspot.confidence * 100).toFixed(1)}%
+            </Text>
+          </Descriptions.Item>
+        )}
+        
+        {hotspot.tags && hotspot.tags.length > 0 && (
+          <Descriptions.Item label="标签" span={hotspot.confidence ? 1 : 2}>
+            <Space wrap>
+              {hotspot.tags.map((tag, idx) => (
+                <Tag key={idx} color="cyan">{tag}</Tag>
+              ))}
+            </Space>
+          </Descriptions.Item>
+        )}
+        
+        {hotspot.platform_url && (
+          <Descriptions.Item label="平台链接" span={2}>
+            <a href={hotspot.platform_url} target="_blank" rel="noopener noreferrer">
+              {hotspot.platform_url}
+            </a>
+          </Descriptions.Item>
+        )}
+        
+        {hotspot.opportunities && hotspot.opportunities.length > 0 && (
+          <Descriptions.Item label="初筛机会" span={2}>
+            <Space direction="vertical" style={{ width: "100%" }}>
+              {hotspot.opportunities.map((opp, idx) => (
+                <Card key={idx} size="small" style={{ backgroundColor: "#f0f9ff" }}>
+                  <Text>💡 {opp}</Text>
+                </Card>
+              ))}
+            </Space>
+          </Descriptions.Item>
+        )}
+        
+        {hotspot.reasoning_keep && hotspot.reasoning_keep.length > 0 && (
+          <Descriptions.Item label="保留原因" span={2}>
+            <Space direction="vertical" style={{ width: "100%" }}>
+              {hotspot.reasoning_keep.map((reason, idx) => (
+                <Card key={idx} size="small" style={{ backgroundColor: "#f6ffed" }}>
+                  <Text>✓ {reason}</Text>
+                </Card>
+              ))}
+            </Space>
+          </Descriptions.Item>
+        )}
+        
+        {hotspot.reasoning_risk && hotspot.reasoning_risk.length > 0 && (
+          <Descriptions.Item label="风险提示" span={2}>
+            <Space direction="vertical" style={{ width: "100%" }}>
+              {hotspot.reasoning_risk.map((risk, idx) => (
+                <Card key={idx} size="small" style={{ backgroundColor: "#fff1f0" }}>
+                  <Text type="warning">⚠ {risk}</Text>
+                </Card>
+              ))}
+            </Space>
+          </Descriptions.Item>
+        )}
+        
+        {/* 原有基础信息 */}
         <Descriptions.Item label="出现次数">
           {hotspot.appearance_count}
         </Descriptions.Item>

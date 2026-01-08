@@ -52,7 +52,8 @@ function Hotspots() {
       filterStatus,
       excludeStatus,
       filterPlatforms,
-      filterDateRange
+      filterDateRange,
+      searchKeyword
     ],
     queryFn: async () => {
       const params: any = {};
@@ -65,6 +66,7 @@ function Hotspots() {
         params.start_time = filterDateRange[0].toISOString();
       if (filterDateRange?.[1])
         params.end_time = filterDateRange[1].toISOString();
+      if (searchKeyword) params.keyword = searchKeyword;
 
       return clustersApi.list(params);
     }

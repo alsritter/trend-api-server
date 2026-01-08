@@ -61,6 +61,7 @@ async def list_clusters(
     platforms: Optional[str] = Query(None, description="平台过滤，逗号分隔，如: xhs,dy,bili"),
     start_time: Optional[str] = Query(None, description="开始时间过滤 (ISO格式)"),
     end_time: Optional[str] = Query(None, description="结束时间过滤 (ISO格式)"),
+    keyword: Optional[str] = Query(None, description="搜索关键词，用于搜索聚簇名称和关键词"),
 ):
     """
     列出所有聚簇
@@ -81,6 +82,7 @@ async def list_clusters(
             platforms=platform_list,
             start_time=start_time,
             end_time=end_time,
+            keyword=keyword,
         )
         return ListClustersResponse(success=True, items=items, count=len(items))
     except Exception as e:

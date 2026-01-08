@@ -253,6 +253,14 @@ class HotspotDetail(BaseModel):
     filtered_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
+    # AI 分析详细信息
+    tags: Optional[List[str]] = Field(None, description="标签列表")
+    confidence: Optional[float] = Field(None, description="置信度 0-1")
+    opportunities: Optional[List[str]] = Field(None, description="初筛可能的商业机会")
+    reasoning_keep: Optional[List[str]] = Field(None, description="保留原因列表")
+    reasoning_risk: Optional[List[str]] = Field(None, description="风险列表")
+    platform_url: Optional[str] = Field(None, description="平台URL")
+    primary_category: Optional[str] = Field(None, description="主要分类")
 
 
 class ListHotspotsRequest(BaseModel):

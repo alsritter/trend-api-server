@@ -295,15 +295,20 @@ class HotspotService:
                 filter_reason = None
                 filtered_at = None
 
+            # 提取平台 URL
+            platform_url = platform_data.get("url") if platform_data else None
+
             now = datetime.now()
             hotspot_id = await conn.fetchval(
                 """
                 INSERT INTO hotspots (
                     keyword, normalized_keyword, embedding, embedding_model,
                     cluster_id, first_seen_at, last_seen_at, appearance_count, platforms,
-                    status, is_filtered, filter_reason, filtered_at
+                    status, is_filtered, filter_reason, filtered_at,
+                    tags, confidence, opportunities, reasoning_keep, reasoning_risk, 
+                    platform_url, primary_category
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
                 RETURNING id
                 """,
                 analysis.title,
@@ -319,6 +324,14 @@ class HotspotService:
                 is_filtered,
                 filter_reason,
                 filtered_at,
+                # AI 分析详细信息
+                analysis.tags if analysis.tags else [],
+                analysis.confidence,
+                analysis.opportunities if analysis.opportunities else [],
+                analysis.reasoning.keep if analysis.reasoning.keep else [],
+                analysis.reasoning.risk if analysis.reasoning.risk else [],
+                platform_url,
+                analysis.primary_category,
             )
 
             action = "rejected" if analysis.is_remove else "created"
@@ -822,6 +835,14 @@ class HotspotService:
                     filtered_at=r["filtered_at"],
                     created_at=r["created_at"],
                     updated_at=r["updated_at"],
+                    # AI 分析详细信息
+                    tags=r.get("tags"),
+                    confidence=r.get("confidence"),
+                    opportunities=r.get("opportunities"),
+                    reasoning_keep=r.get("reasoning_keep"),
+                    reasoning_risk=r.get("reasoning_risk"),
+                    platform_url=r.get("platform_url"),
+                    primary_category=r.get("primary_category"),
                 )
                 for r in records
             ]
@@ -897,6 +918,14 @@ class HotspotService:
                 filtered_at=r["filtered_at"],
                 created_at=r["created_at"],
                 updated_at=r["updated_at"],
+                # AI 分析详细信息
+                tags=r.get("tags"),
+                confidence=r.get("confidence"),
+                opportunities=r.get("opportunities"),
+                reasoning_keep=r.get("reasoning_keep"),
+                reasoning_risk=r.get("reasoning_risk"),
+                platform_url=r.get("platform_url"),
+                primary_category=r.get("primary_category"),
             )
 
     async def get_cluster_hotspots(self, cluster_id: int) -> List[HotspotDetail]:
@@ -947,6 +976,14 @@ class HotspotService:
                     filtered_at=r["filtered_at"],
                     created_at=r["created_at"],
                     updated_at=r["updated_at"],
+                    # AI 分析详细信息
+                    tags=r.get("tags"),
+                    confidence=r.get("confidence"),
+                    opportunities=r.get("opportunities"),
+                    reasoning_keep=r.get("reasoning_keep"),
+                    reasoning_risk=r.get("reasoning_risk"),
+                    platform_url=r.get("platform_url"),
+                    primary_category=r.get("primary_category"),
                 )
                 for r in records
             ]

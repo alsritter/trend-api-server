@@ -19,6 +19,7 @@ class ClusterService:
         platforms: Optional[List[str]] = None,
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
+        keyword: Optional[str] = None,
     ) -> List[ClusterInfo]:
         """
         列出所有聚簇
@@ -29,6 +30,7 @@ class ClusterService:
             platforms: 平台列表过滤
             start_time: 开始时间过滤
             end_time: 结束时间过滤
+            keyword: 搜索关键词，用于搜索聚簇名称和关键词
 
         Returns:
             聚簇列表
@@ -70,6 +72,12 @@ class ClusterService:
             if end_time:
                 conditions.append(f"h.updated_at <= ${param_counter}")
                 params.append(datetime.fromisoformat(end_time.replace('Z', '+00:00')))
+                param_counter += 1
+
+            if keyword:
+                # 关键词搜索：搜索聚簇名称或关键词列表
+                conditions.append(f"(c.cluster_name ILIKE ${param_counter} OR c.keywords::text ILIKE ${param_counter})")
+                params.append(f"%{keyword}%")
                 param_counter += 1
 
             where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""

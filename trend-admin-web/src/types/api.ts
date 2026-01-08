@@ -358,6 +358,14 @@ export interface HotspotDetail {
   filtered_at?: string;
   created_at: string;
   updated_at: string;
+  // AI 分析详细信息
+  tags?: string[];
+  confidence?: number;
+  opportunities?: string[];
+  reasoning_keep?: string[];
+  reasoning_risk?: string[];
+  platform_url?: string;
+  primary_category?: string;
 }
 
 // 相似热点
