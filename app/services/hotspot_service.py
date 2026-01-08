@@ -10,6 +10,7 @@ from app.schemas.hotspot import (
     PushStatus,
     HotspotDetail,
     PlatformInfo,
+    PlatformDataInput,
     BusinessReportContent,
     PushQueueItem,
 )
@@ -113,14 +114,16 @@ class HotspotService:
             return 0
 
     async def add_keyword_from_analysis(
-        self, analysis: KeywordAnalysis, platform_data: Optional[Dict[str, Any]] = None
+        self,
+        analysis: KeywordAnalysis,
+        platform_data: Optional[PlatformDataInput] = None,
     ) -> Dict[str, Any]:
         """
         根据AI分析结果添加热词
 
         Args:
             analysis: AI返回的热词分析结果
-            platform_data: 平台原始数据(包含 type, rank, viewnum 等)
+            platform_data: 平台原始数据(包含 type, rank, viewnum, url 等)
 
         Returns:
             包含 hotspot_id, action, message 的字典
@@ -133,7 +136,10 @@ class HotspotService:
             )
 
             if existing_hotspot:
-                # 更新现有热点的 AI 分析信息
+                # 提取平台 URL（如果有）
+                platform_url = platform_data.url if platform_data else None
+
+                # 更新现有热点的 AI 分析信息和平台 URL
                 await conn.execute(
                     """
                     UPDATE hotspots
@@ -145,7 +151,8 @@ class HotspotService:
                         opportunities = $4,
                         reasoning_keep = $5,
                         reasoning_risk = $6,
-                        primary_category = $7
+                        primary_category = $7,
+                        platform_url = COALESCE($8, platform_url)
                     WHERE id = $1
                     """,
                     existing_hotspot["id"],
@@ -155,6 +162,7 @@ class HotspotService:
                     analysis.reasoning.keep if analysis.reasoning.keep else [],
                     analysis.reasoning.risk if analysis.reasoning.risk else [],
                     analysis.primary_category,
+                    platform_url,
                 )
 
                 return {
@@ -261,15 +269,15 @@ class HotspotService:
 
             # 构建平台信息（从传入的平台数据中提取）
             if platform_data:
-                platform_type = platform_data.get("type", "unknown")
+                platform_type = platform_data.type
                 platform_name = platform_name_map.get(platform_type, platform_type)
 
                 # 解析热度值（去除万、亿等单位）
-                viewnum_str = platform_data.get("viewnum", "0")
+                viewnum_str = platform_data.viewnum or "0"
                 heat_score = self._parse_viewnum(viewnum_str)
 
                 # 安全地转换 rank,处理空字符串的情况
-                rank_value = platform_data.get("rank", 0)
+                rank_value = platform_data.rank
                 rank = int(rank_value) if rank_value and str(rank_value).strip() else 0
 
                 platforms = [
@@ -277,9 +285,7 @@ class HotspotService:
                         "platform": platform_name,
                         "rank": rank,
                         "heat_score": heat_score,
-                        "seen_at": platform_data.get(
-                            "date", datetime.now().isoformat()
-                        ),
+                        "seen_at": platform_data.date or datetime.now().isoformat(),
                     }
                 ]
             else:
@@ -308,7 +314,7 @@ class HotspotService:
                 filtered_at = None
 
             # 提取平台 URL
-            platform_url = platform_data.get("url") if platform_data else None
+            platform_url = platform_data.url if platform_data else None
 
             now = datetime.now()
             hotspot_id = await conn.fetchval(

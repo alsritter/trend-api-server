@@ -67,6 +67,16 @@ class PlatformInfo(BaseModel):
     seen_at: str = Field(..., description="发现时间")
 
 
+class PlatformDataInput(BaseModel):
+    """平台原始数据输入（从外部接收的平台数据）"""
+
+    type: str = Field(..., description="平台类型: xhs, dy, bili, ks, wb, tieba, zhihu")
+    rank: Optional[str] = Field(None, description="排名（可能为空字符串）")
+    viewnum: Optional[str] = Field(None, description="热度值（如 '541.2万'）")
+    date: Optional[str] = Field(None, description="发现日期")
+    url: Optional[str] = Field(None, description="平台URL链接")
+
+
 class HotspotBase(BaseModel):
     """热点基础模型"""
 
@@ -79,8 +89,8 @@ class AddHotspotKeywordRequest(BaseModel):
     """添加热词请求 - 用于第一阶段AI判断后的结果"""
 
     analysis: KeywordAnalysis = Field(..., description="AI分析结果")
-    platform_data: Optional[dict] = Field(
-        None, description="平台原始数据(包含 type, rank, viewnum, date 等)"
+    platform_data: Optional[PlatformDataInput] = Field(
+        None, description="平台原始数据(包含 type, rank, viewnum, date, url 等)"
     )
 
 

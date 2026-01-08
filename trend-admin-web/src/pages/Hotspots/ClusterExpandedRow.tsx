@@ -1,5 +1,5 @@
 import { Space, Button, Tag, Tooltip, Modal, message, Row, Col, Card, Typography, Descriptions } from "antd";
-import { DeleteOutlined } from "@ant-design/icons";
+import { DeleteOutlined, LinkOutlined } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { hotspotsApi } from "@/api/hotspots";
 import type { HotspotDetail } from "@/types/api";
@@ -69,6 +69,18 @@ export function ClusterExpandedRow({
             <Descriptions.Item label="关键词">
               <Text strong>{hotspot.keyword}</Text>
             </Descriptions.Item>
+            {hotspot.platform_url && (
+              <Descriptions.Item label="平台链接">
+                <a 
+                  href={hotspot.platform_url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  style={{ fontWeight: 500 }}
+                >
+                  <LinkOutlined /> 查看原文
+                </a>
+              </Descriptions.Item>
+            )}
             <Descriptions.Item label="标准化关键词">
               {hotspot.normalized_keyword}
             </Descriptions.Item>
@@ -96,13 +108,6 @@ export function ClusterExpandedRow({
                     <Tag key={idx} color="cyan">{tag}</Tag>
                   ))}
                 </Space>
-              </Descriptions.Item>
-            )}
-            {hotspot.platform_url && (
-              <Descriptions.Item label="平台链接">
-                <a href={hotspot.platform_url} target="_blank" rel="noopener noreferrer">
-                  查看原文
-                </a>
               </Descriptions.Item>
             )}
             <Descriptions.Item label="出现次数">
