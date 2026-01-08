@@ -13,6 +13,17 @@ PLATFORM_CONTENT_TABLES = {
     "zhihu": "zhihu_content",
 }
 
+# 中文映射成平台
+PLATFORM_NAME_MAP = {
+    "小红书": "xhs",
+    "抖音": "dy",
+    "快手": "ks",
+    "哔哩哔哩": "bili",
+    "微博": "wb",
+    "贴吧": "tieba",
+    "知乎": "zhihu",
+}
+
 # 平台评论表映射
 PLATFORM_COMMENT_TABLES = {
     "xhs": "xhs_note_comment",

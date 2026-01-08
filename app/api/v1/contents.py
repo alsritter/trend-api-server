@@ -9,6 +9,7 @@ from app.constants import (
     PLATFORM_CONTENT_TABLES,
     PLATFORM_COMMENT_TABLES,
     PLATFORM_CREATOR_TABLES,
+    PLATFORM_NAME_MAP,
     PLATFORM_TIME_FIELDS,
     PLATFORM_CONTENT_ID_FIELDS,
 )
@@ -35,8 +36,15 @@ async def list_contents(
     支持的平台: xhs, dy, ks, bili, wb, tieba, zhihu
     支持按热词ID过滤，返回该热词关联的所有内容
     """
+
     if platform not in PLATFORM_CONTENT_TABLES:
-        raise HTTPException(status_code=400, detail=f"Unsupported platform: {platform}")
+        # 有可能是中文平台名，转换成代码
+        if platform in PLATFORM_NAME_MAP:
+            platform = PLATFORM_NAME_MAP[platform]
+        else:
+            raise HTTPException(
+                status_code=400, detail=f"Unsupported platform: {platform}"
+            )
 
     table_name = PLATFORM_CONTENT_TABLES[platform]
     time_field = PLATFORM_TIME_FIELDS[platform]
@@ -45,8 +53,7 @@ async def list_contents(
         # 如果提供了 hotspot_id，验证热词是否存在
         if hotspot_id:
             hotspot_result = await pg_conn.fetchrow(
-                "SELECT id, keyword FROM hotspots WHERE id = $1",
-                hotspot_id
+                "SELECT id, keyword FROM hotspots WHERE id = $1", hotspot_id
             )
             if not hotspot_result:
                 raise HTTPException(status_code=404, detail=f"热词 {hotspot_id} 不存在")
@@ -111,14 +118,16 @@ async def list_contents(
             if hotspot_ids:
                 hotspots = await pg_conn.fetch(
                     "SELECT id, keyword FROM hotspots WHERE id = ANY($1::int[])",
-                    list(hotspot_ids)
+                    list(hotspot_ids),
                 )
                 hotspot_map = {h["id"]: h["keyword"] for h in hotspots}
 
             # 为每个 item 添加 hotspot_keyword
             for item in items:
                 hid = item.get("hotspot_id")
-                item["hotspot_keyword"] = hotspot_map.get(int(hid)) if hid and hid != "" else None
+                item["hotspot_keyword"] = (
+                    hotspot_map.get(int(hid)) if hid and hid != "" else None
+                )
 
             return APIResponse(
                 code=0,
@@ -132,6 +141,64 @@ async def list_contents(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to query contents: {str(e)}"
+        )
+
+
+@router.get("/stats/counts", response_model=APIResponse[dict])
+async def get_content_counts(
+    hotspot_ids: str = Query(..., description="热词ID列表，逗号分隔"),
+    platform: str = Query("xhs", description="平台代码"),
+    conn: aiomysql.Connection = Depends(get_db),
+):
+    """
+    批量查询热词的内容数量
+
+    支持的平台: xhs, dy, ks, bili, wb, tieba, zhihu
+    返回格式: {hotspot_id: count, ...}
+    """
+    if platform not in PLATFORM_CONTENT_TABLES:
+        # 有可能是中文平台名，转换成代码
+        if platform in PLATFORM_NAME_MAP:
+            platform = PLATFORM_NAME_MAP[platform]
+        else:
+            raise HTTPException(
+                status_code=400, detail=f"Unsupported platform: {platform}"
+            )
+
+    table_name = PLATFORM_CONTENT_TABLES[platform]
+
+    try:
+        # 解析热词ID列表
+        ids = [int(id.strip()) for id in hotspot_ids.split(",") if id.strip()]
+        if not ids:
+            return APIResponse(code=0, message="success", data={})
+
+        async with conn.cursor(aiomysql.DictCursor) as cursor:
+            # 构建批量查询SQL
+            placeholders = ",".join(["%s"] * len(ids))
+            count_sql = f"""
+                SELECT hotspot_id, COUNT(*) as count
+                FROM {table_name}
+                WHERE hotspot_id IN ({placeholders})
+                GROUP BY hotspot_id
+            """
+            await cursor.execute(count_sql, ids)
+            results = await cursor.fetchall()
+
+            # 转换为字典格式
+            counts = {str(row["hotspot_id"]): row["count"] for row in results}
+
+            # 补充没有内容的热词（设为0）
+            for hotspot_id in ids:
+                if str(hotspot_id) not in counts:
+                    counts[str(hotspot_id)] = 0
+
+            return APIResponse(code=0, message="success", data=counts)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid hotspot_ids format")
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to query content counts: {str(e)}"
         )
 
 
@@ -156,7 +223,13 @@ async def list_comments(
     - 其他平台: note_id
     """
     if platform not in PLATFORM_COMMENT_TABLES:
-        raise HTTPException(status_code=400, detail=f"Unsupported platform: {platform}")
+        # 有可能是中文平台名，转换成代码
+        if platform in PLATFORM_NAME_MAP:
+            platform = PLATFORM_NAME_MAP[platform]
+        else:
+            raise HTTPException(
+                status_code=400, detail=f"Unsupported platform: {platform}"
+            )
 
     table_name = PLATFORM_COMMENT_TABLES[platform]
 
@@ -205,7 +278,13 @@ async def get_creator(
     支持的平台: xhs, dy, ks, bili, wb, tieba, zhihu
     """
     if platform not in PLATFORM_CREATOR_TABLES:
-        raise HTTPException(status_code=400, detail=f"Unsupported platform: {platform}")
+        # 有可能是中文平台名，转换成代码
+        if platform in PLATFORM_NAME_MAP:
+            platform = PLATFORM_NAME_MAP[platform]
+        else:
+            raise HTTPException(
+                status_code=400, detail=f"Unsupported platform: {platform}"
+            )
 
     table_name = PLATFORM_CREATOR_TABLES[platform]
 

@@ -25,4 +25,13 @@ export const contentsApi = {
   // 获取创作者信息
   getCreator: (platform: string, userId: string) =>
     apiClient.get<any, any>(`/api/v1/contents/${platform}/creators/${userId}`),
+
+  // 批量获取热词的内容数量
+  getContentCounts: (hotspotIds: number[], platform: string = 'xhs') =>
+    apiClient.get<any, Record<string, number>>('/api/v1/contents/stats/counts', {
+      params: {
+        hotspot_ids: hotspotIds.join(','),
+        platform
+      }
+    }),
 };
