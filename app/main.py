@@ -7,8 +7,7 @@ import os
 import asyncio
 from datetime import datetime
 from app.config import settings
-from app.db.session import init_db, close_db
-from app.db.vector_session import init_vector_db, close_vector_db
+from app.db.session import init_db, close_db, init_vector_db, close_vector_db
 from app.api.v1 import (
     health,
     tasks,
@@ -28,7 +27,7 @@ stop_timeout_check = False
 
 async def check_timeout_tasks_background():
     """后台定期检查超时任务"""
-    from app.db import session, vector_session
+    from app.db import session
     from app.db.task_repo import TaskRepository
     from app.celery_app.celery import celery_app
     from app.services.hotspot_service import HotspotService
@@ -48,7 +47,7 @@ async def check_timeout_tasks_background():
                 break
 
             # 检查数据库连接池是否可用
-            if session.db_pool is None or vector_session.pg_pool is None:
+            if session.db_pool is None or session.pg_pool is None:
                 print("[Timeout Checker] Database pool not initialized, skip check")
                 continue
 

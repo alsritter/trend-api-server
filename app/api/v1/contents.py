@@ -4,7 +4,7 @@ import aiomysql
 from app.schemas.content import ContentListResponse, CommentListResponse
 from app.schemas.common import APIResponse
 from app.dependencies import get_db
-from app.db.vector_session import get_vector_db
+from app.db.session import get_vector_db
 from app.constants import (
     PLATFORM_CONTENT_TABLES,
     PLATFORM_COMMENT_TABLES,

@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
-from app.db import vector_session
+from app.db import session
 from app.services.vector_service import vector_service
 from app.schemas.hotspot import (
     KeywordAnalysis,
@@ -128,7 +128,7 @@ class HotspotService:
         Returns:
             包含 hotspot_id, action, message 的字典
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             # 检查是否已存在（无论是低价值词还是有价值词都添加到热点表）
             existing_hotspot = await conn.fetchrow(
                 "SELECT id, status, last_seen_at FROM hotspots WHERE keyword = $1",
@@ -396,7 +396,7 @@ class HotspotService:
         Returns:
             包含 exists, action, hotspot_id, similar_hotspots, message 的字典
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             # 1. 检查完全匹配
             exact_match = await conn.fetchrow(
                 """
@@ -557,7 +557,7 @@ class HotspotService:
         Returns:
             包含 success, report_id, message 的字典
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             async with conn.transaction():
                 # 插入商业报告
                 report_id = await conn.fetchval(
@@ -602,7 +602,7 @@ class HotspotService:
         Returns:
             包含 success, push_id, message 的字典
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             # 获取报告的优先级和分数
             report = await conn.fetchrow(
                 "SELECT priority, score FROM business_reports WHERE id = $1", report_id
@@ -643,7 +643,7 @@ class HotspotService:
         Returns:
             推送队列项列表
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             # 获取上次推送时间，确保间隔 >= 2小时
             last_push = await conn.fetchval(
                 """
@@ -732,7 +732,7 @@ class HotspotService:
         Returns:
             包含 total, page, page_size, items 的字典
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             # 如果使用相似度搜索
             if similarity_search:
                 # 生成搜索词的向量
@@ -886,7 +886,7 @@ class HotspotService:
         Returns:
             包含 success, message 的字典
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             result = await conn.execute(
                 "DELETE FROM hotspots WHERE id = $1", hotspot_id
             )
@@ -907,7 +907,7 @@ class HotspotService:
         Returns:
             热点详情或 None
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             r = await conn.fetchrow("SELECT * FROM hotspots WHERE id = $1", hotspot_id)
 
             if not r:
@@ -960,7 +960,7 @@ class HotspotService:
         Returns:
             热点列表
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             records = await conn.fetch(
                 """
                 SELECT * FROM hotspots
@@ -1023,7 +1023,7 @@ class HotspotService:
         Returns:
             包含 success, hotspot_id, cluster_id, message 的字典
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             async with conn.transaction():
                 # 获取源热点信息
                 source_hotspot = await conn.fetchrow(
@@ -1154,7 +1154,7 @@ class HotspotService:
         Returns:
             包含 total, items 的字典
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             async with conn.transaction():
                 # 计算时间阈值
                 time_threshold = datetime.now() - timedelta(hours=hours)
@@ -1314,7 +1314,7 @@ class HotspotService:
         Returns:
             包含 success, message, old_status, new_status 的字典
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             # 获取当前状态
             current = await conn.fetchrow(
                 "SELECT id, keyword, status FROM hotspots WHERE id = $1", hotspot_id
@@ -1363,7 +1363,7 @@ class HotspotService:
         Returns:
             包含 success, message, marked_count, hotspot_ids 的字典
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             # 计算时间阈值
             time_threshold = datetime.now() - timedelta(days=days)
 
@@ -1439,7 +1439,7 @@ class HotspotService:
         """
         from app.celery_app.tasks.crawler_tasks import run_crawler
 
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             # 验证热点是否存在
             hotspot = await conn.fetchrow(
                 "SELECT id, keyword, status FROM hotspots WHERE id = $1",
@@ -1529,7 +1529,7 @@ class HotspotService:
         Returns:
             包含 total, page, page_size, items 的字典
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             # 查询总数
             total = await conn.fetchval(
                 "SELECT COUNT(*) FROM hotspots WHERE status = $1",

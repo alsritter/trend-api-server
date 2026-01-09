@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict, Any
-from app.db import vector_session
+from app.db import session
 from app.schemas.hotspot import ClusterInfo, PlatformStat, HotspotStatus
 import json
 from datetime import datetime
@@ -35,7 +35,7 @@ class ClusterService:
         Returns:
             聚簇列表
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             # 构建查询条件
             conditions = []
             params = []
@@ -168,7 +168,7 @@ class ClusterService:
         Returns:
             聚簇详情或 None
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             r = await conn.fetchrow(
                 """
                 SELECT
@@ -224,7 +224,7 @@ class ClusterService:
         Returns:
             包含 success, cluster_id, message 的字典
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             async with conn.transaction():
                 # 如果提供了热点ID，验证它们存在
                 keywords = []
@@ -289,7 +289,7 @@ class ClusterService:
         Returns:
             包含 success, cluster_id, message 的字典
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             async with conn.transaction():
                 # 获取所有源簇信息
                 clusters = await conn.fetch(
@@ -384,7 +384,7 @@ class ClusterService:
         Returns:
             包含 success, new_cluster_id, message 的字典
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             async with conn.transaction():
                 # 检查簇是否存在
                 cluster = await conn.fetchrow(
@@ -507,7 +507,7 @@ class ClusterService:
         Returns:
             包含 success, message 的字典
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             result = await conn.execute(
                 """
                 UPDATE hotspot_clusters
@@ -535,7 +535,7 @@ class ClusterService:
         Returns:
             包含 success, message 的字典
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             async with conn.transaction():
                 # 将所有相关热点的cluster_id设为NULL
                 await conn.execute(
@@ -572,7 +572,7 @@ class ClusterService:
         Returns:
             包含 success, message 的字典
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             async with conn.transaction():
                 # 获取热点信息
                 hotspot = await conn.fetchrow(

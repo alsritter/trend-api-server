@@ -1,7 +1,7 @@
 from typing import List, Optional, Dict, Any
 from openai import AsyncOpenAI
 from app.config import settings
-from app.db import vector_session
+from app.db import session
 
 
 class VectorService:
@@ -57,7 +57,7 @@ class VectorService:
         vector = await self.generate_embedding(text)
 
         # 插入数据库
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             record_id = await conn.fetchval(
                 """
                 INSERT INTO modeldata (vector, collection_id, content, metadata, model_name)
@@ -99,7 +99,7 @@ class VectorService:
         # 确保 ef_search 至少为 1
         ef_search = max(ef_search, 1)
 
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             # 在事务中执行所有操作
             async with conn.transaction():
                 # 设置 HNSW 搜索参数（在事务内部）
@@ -171,7 +171,7 @@ class VectorService:
         Returns:
             是否删除成功
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             result = await conn.execute(
                 "DELETE FROM modeldata WHERE id = $1",
                 vector_id,
@@ -190,7 +190,7 @@ class VectorService:
         Returns:
             删除的向量数量
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             result = await conn.execute(
                 "DELETE FROM modeldata WHERE collection_id = $1",
                 collection_id,
@@ -208,7 +208,7 @@ class VectorService:
         Returns:
             向量信息，包含 id, collection_id, metadata, createtime
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             record = await conn.fetchrow(
                 """
                 SELECT id, collection_id, content, metadata, model_name, createtime
@@ -235,7 +235,7 @@ class VectorService:
         Returns:
             集合列表，每个集合包含 collection_id 和 vectors（向量列表）
         """
-        async with vector_session.pg_pool.acquire() as conn:
+        async with session.pg_pool.acquire() as conn:
             # 获取所有向量数据
             records = await conn.fetch(
                 """

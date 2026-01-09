@@ -1,11 +1,36 @@
+"""
+统一数据库连接池管理
+
+本模块提供异步和同步两种数据库连接方式：
+- 异步连接：用于 FastAPI 的异步端点
+- 同步连接：用于 Celery worker 等独立进程
+
+支持的数据库：
+- MySQL（异步: aiomysql, 同步: pymysql）
+- PostgreSQL with pgvector（异步: asyncpg）
+"""
+
 import aiomysql
 import aiofiles
+import asyncpg
+import pymysql
+import psycopg2
+import psycopg2.extras
 import os
 from typing import AsyncGenerator
+from contextlib import contextmanager
 from app.config import settings
+from pgvector.asyncpg import register_vector
 
-# 全局数据库连接池
+# ==================== 全局连接池 ====================
+# MySQL 异步连接池
 db_pool: aiomysql.Pool = None
+
+# PostgreSQL 异步连接池（支持 pgvector）
+pg_pool: asyncpg.Pool = None
+
+
+# ==================== 异步 MySQL 连接池管理 ====================
 
 
 async def init_table_schema():
@@ -141,3 +166,136 @@ async def get_db() -> AsyncGenerator:
             yield conn
         finally:
             pass  # 连接会自动归还到连接池
+
+
+# ==================== 异步 PostgreSQL 连接池管理 ====================
+
+
+async def init_vector_db():
+    """初始化 PgVector 数据库连接池"""
+    global pg_pool
+    pg_pool = await asyncpg.create_pool(
+        host=settings.PGVECTOR_HOST,
+        port=settings.PGVECTOR_PORT,
+        user=settings.PGVECTOR_USER,
+        password=settings.PGVECTOR_PASSWORD,
+        database=settings.PGVECTOR_DB,
+        min_size=1,
+        max_size=10,
+        init=register_vector,
+    )
+    print(
+        f"PgVector connection pool initialized: {settings.PGVECTOR_HOST}:{settings.PGVECTOR_PORT}/{settings.PGVECTOR_DB}"
+    )
+
+
+async def close_vector_db():
+    """关闭 PgVector 数据库连接池"""
+    global pg_pool
+    if pg_pool:
+        await pg_pool.close()
+        print("PgVector connection pool closed")
+
+
+async def get_vector_db() -> AsyncGenerator:
+    """
+    获取 PgVector 数据库连接（用于 FastAPI 依赖注入）
+
+    Usage:
+        @app.get("/vectors")
+        async def get_vectors(conn = Depends(get_vector_db)):
+            result = await conn.fetch("SELECT * FROM modeldata LIMIT 10")
+            return result
+    """
+    async with pg_pool.acquire() as conn:
+        try:
+            yield conn
+        finally:
+            pass  # 连接会自动归还到连接池
+
+
+async def get_hotspot_db() -> AsyncGenerator:
+    """
+    获取热点数据库连接（用于 FastAPI 依赖注入）
+    使用与 vector_db 相同的连接池，因为它们使用同一个 PostgreSQL 数据库
+
+    Usage:
+        @app.get("/hotspots")
+        async def get_hotspots(conn = Depends(get_hotspot_db)):
+            result = await conn.fetch("SELECT * FROM hotspots LIMIT 10")
+            return result
+    """
+    async with pg_pool.acquire() as conn:
+        try:
+            yield conn
+        finally:
+            pass  # 连接会自动归还到连接池
+
+
+# ==================== 同步连接管理（用于 Celery worker）====================
+
+
+@contextmanager
+def get_mysql_connection():
+    """
+    获取 MySQL 同步连接的上下文管理器
+
+    Usage:
+        with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT * FROM table")
+                result = cursor.fetchall()
+    """
+    conn = None
+    try:
+        conn = pymysql.connect(
+            host=settings.RELATION_DB_HOST,
+            port=settings.RELATION_DB_PORT,
+            user=settings.RELATION_DB_USER,
+            password=settings.RELATION_DB_PWD,
+            database=settings.RELATION_DB_NAME,
+            charset="utf8mb4",
+        )
+        yield conn
+        conn.commit()
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise e
+    finally:
+        if conn:
+            conn.close()
+
+
+@contextmanager
+def get_postgres_connection():
+    """
+    获取 PostgreSQL 同步连接的上下文管理器（用于 Celery worker 等独立进程）
+
+    注意：此函数创建独立连接，不使用全局连接池。
+    适用于 Celery worker 等无法访问主进程连接池的场景。
+
+    Usage:
+        with get_postgres_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("UPDATE table SET col = %s WHERE id = %s", (value, id))
+            conn.commit()
+    """
+    conn = None
+    try:
+        conn = psycopg2.connect(
+            host=settings.PGVECTOR_HOST,
+            port=settings.PGVECTOR_PORT,
+            user=settings.PGVECTOR_USER,
+            password=settings.PGVECTOR_PASSWORD,
+            database=settings.PGVECTOR_DB,
+        )
+        yield conn
+        conn.commit()
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise e
+    finally:
+        if conn:
+            conn.close()

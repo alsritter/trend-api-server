@@ -1,13 +1,11 @@
 import os
 import subprocess
-import asyncio
 from datetime import datetime
 from celery import Task
 from celery.utils.log import get_task_logger
 from app.celery_app.celery import celery_app
 from app.config import settings
 from app.utils.crawler_config import merge_task_config
-from app.db.task_repo import TaskRepository
 
 logger = get_task_logger(__name__)
 
@@ -141,64 +139,72 @@ def parse_crawler_progress(line: str, platform: str) -> dict:
     return result
 
 
-
-async def update_task_status_async(task_id: str, **kwargs):
-    """异步更新任务状态到数据库"""
-    try:
-        # 动态导入 db_pool，避免导入时的快照问题
-        from app.db import session
-
-        if session.db_pool is None:
-            logger.warning("Database pool not initialized, skip task status update")
-            return
-
-        async with session.db_pool.acquire() as conn:
-            repo = TaskRepository(conn)
-            await repo.update_task_status(task_id, **kwargs)
-    except Exception as e:
-        logger.error(f"Failed to update task status: {e}")
-
-
 def update_task_status_sync(task_id: str, **kwargs):
     """同步方式更新任务状态（在 Celery worker 中调用）"""
+    import json
+    from app.db.session import get_mysql_connection
+
     try:
-        asyncio.run(update_task_status_async(task_id, **kwargs))
+        with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                # 构建更新语句
+                updates = ["status = %s", "updated_at = NOW()"]
+                params = [kwargs.get("status")]
+
+                if "progress_current" in kwargs:
+                    updates.append("progress_current = %s")
+                    params.append(kwargs["progress_current"])
+
+                if "progress_total" in kwargs:
+                    updates.append("progress_total = %s")
+                    params.append(kwargs["progress_total"])
+
+                if "progress_percentage" in kwargs:
+                    updates.append("progress_percentage = %s")
+                    params.append(kwargs["progress_percentage"])
+
+                if "result" in kwargs:
+                    updates.append("result = %s")
+                    params.append(json.dumps(kwargs["result"], ensure_ascii=False))
+
+                if "error" in kwargs:
+                    updates.append("error = %s")
+                    params.append(kwargs["error"])
+
+                if "started_at" in kwargs:
+                    updates.append("started_at = %s")
+                    params.append(kwargs["started_at"])
+
+                if "finished_at" in kwargs:
+                    updates.append("finished_at = %s")
+                    params.append(kwargs["finished_at"])
+
+                params.append(task_id)
+                sql = f"UPDATE crawler_tasks SET {', '.join(updates)} WHERE task_id = %s"
+                cursor.execute(sql, params)
     except Exception as e:
         logger.error(f"tasks.run_crawler[{task_id}]: Failed to update task status: {e}")
 
 
-async def update_hotspot_status_async(hotspot_id: str):
-    """异步更新热点状态为 crawled"""
+def update_hotspot_status_on_crawl_complete(hotspot_id: str):
+    """同步方式更新热点状态（在 Celery worker 中调用）"""
+    from app.db.session import get_mysql_connection, get_postgres_connection
+    from app.schemas.hotspot import HotspotStatus
+
     try:
-        # 动态导入，避免循环依赖
-        from app.db import vector_session
-        from app.schemas.hotspot import HotspotStatus
-
-        if vector_session.pg_pool is None:
-            logger.warning(
-                "PostgreSQL pool not initialized, skip hotspot status update"
-            )
-            return
-
-        # 将 hotspot_id 转换为整数
         hotspot_id_int = int(hotspot_id)
 
-        async with vector_session.pg_pool.acquire() as conn:
-            # 检查当前该热点的所有任务是否都完成
-            from app.db import session as mysql_session
-
-            if mysql_session.db_pool is None:
-                logger.warning("MySQL pool not initialized, skip hotspot status check")
-                return
-
-            async with mysql_session.db_pool.acquire() as mysql_conn:
-                repo = TaskRepository(mysql_conn)
-                tasks = await repo.get_tasks_by_hotspot_id(hotspot_id_int)
+        # 检查该热点的所有任务是否都已完成
+        with get_mysql_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "SELECT status FROM crawler_tasks WHERE hotspot_id = %s",
+                    (hotspot_id_int,),
+                )
+                tasks = cursor.fetchall()
 
                 # 检查是否所有任务都已完成
-                all_completed = all(
-                    task.status in ["SUCCESS", "FAILURE"] for task in tasks
-                )
+                all_completed = all(task[0] in ["SUCCESS", "FAILURE"] for task in tasks)
 
                 if not all_completed:
                     logger.info(
@@ -207,30 +213,22 @@ async def update_hotspot_status_async(hotspot_id: str):
                     )
                     return
 
-            # 所有任务都完成，更新热点状态为 crawled
-            await conn.execute(
-                """
-                UPDATE hotspots
-                SET status = $1,
-                    last_crawled_at = CURRENT_TIMESTAMP,
-                    crawl_count = crawl_count + 1,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = $2
-                """,
-                HotspotStatus.CRAWLED.value,
-                hotspot_id_int,
-            )
-            logger.info(
-                f"Successfully updated hotspot {hotspot_id_int} status to crawled"
-            )
-    except Exception as e:
-        logger.error(f"Failed to update hotspot status: {e}")
+        # 更新热点状态为 crawled（使用同步连接）
+        with get_postgres_connection() as pg_conn:
+            with pg_conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE hotspots
+                    SET status = %s,
+                        last_crawled_at = CURRENT_TIMESTAMP,
+                        crawl_count = crawl_count + 1,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    """,
+                    (HotspotStatus.CRAWLED.value, hotspot_id_int),
+                )
+            logger.info(f"Successfully updated hotspot {hotspot_id_int} status to crawled")
 
-
-def update_hotspot_status_on_crawl_complete(hotspot_id: str):
-    """同步方式更新热点状态（在 Celery worker 中调用）"""
-    try:
-        asyncio.run(update_hotspot_status_async(hotspot_id))
     except Exception as e:
         logger.error(f"tasks.run_crawler: Failed to update hotspot status: {e}")
 
@@ -497,7 +495,9 @@ def run_crawler(
 
             while not stop_polling.is_set():
                 try:
-                    # 使用 asyncio.run() 加载 checkpoint
+                    # 直接读取 checkpoint 文件而不是使用异步方法
+                    import asyncio
+
                     checkpoint = asyncio.run(
                         checkpoint_manager.load_checkpoint(
                             platform=platform,
