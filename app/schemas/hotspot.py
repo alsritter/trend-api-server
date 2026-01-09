@@ -71,10 +71,17 @@ class PlatformDataInput(BaseModel):
     """平台原始数据输入（从外部接收的平台数据）"""
 
     type: str = Field(..., description="平台类型: xhs, dy, bili, ks, wb, tieba, zhihu")
-    rank: Optional[str] = Field(None, description="排名（可能为空字符串）")
+    rank: Optional[int] = Field(None, description="排名")
+    name: Optional[str] = Field(None, description="热词名称")
     viewnum: Optional[str] = Field(None, description="热度值（如 '541.2万'）")
     date: Optional[str] = Field(None, description="发现日期")
     url: Optional[str] = Field(None, description="平台URL链接")
+    icon: Optional[str] = Field(None, description="图标URL")
+    word_cover: Optional[dict] = Field(None, description="词封面信息")
+    word_type: Optional[str] = Field(None, description="词类型")
+    
+    class Config:
+        extra = "allow"  # 允许额外的字段，保持兼容性
 
 
 class HotspotBase(BaseModel):
