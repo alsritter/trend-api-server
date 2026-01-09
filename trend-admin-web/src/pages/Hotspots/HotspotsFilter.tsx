@@ -45,9 +45,9 @@ export function HotspotsFilter({
 
       <Select
         mode="multiple"
-        placeholder="选择状态"
-        value={filterStatus}
-        onChange={onStatusChange}
+        placeholder="排除状态（反选）"
+        value={excludeStatus}
+        onChange={onExcludeStatusChange}
         style={{ width: 250 }}
         allowClear
         maxTagCount="responsive"
@@ -61,9 +61,9 @@ export function HotspotsFilter({
 
       <Select
         mode="multiple"
-        placeholder="排除状态（反选）"
-        value={excludeStatus}
-        onChange={onExcludeStatusChange}
+        placeholder="选择状态"
+        value={filterStatus}
+        onChange={onStatusChange}
         style={{ width: 250 }}
         allowClear
         maxTagCount="responsive"

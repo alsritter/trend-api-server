@@ -7,12 +7,10 @@ from app.schemas.hotspot import (
     SimilarHotspot,
     HotspotStatus,
     Priority,
-    PushStatus,
     HotspotDetail,
     PlatformInfo,
     PlatformDataInput,
     BusinessReportContent,
-    PushQueueItem,
 )
 import json
 
@@ -587,125 +585,6 @@ class HotspotService:
                     "report_id": report_id,
                     "message": f"商业报告创建成功 (ID: {report_id})",
                 }
-
-    async def add_to_push_queue(
-        self, hotspot_id: int, report_id: int, channels: List[str]
-    ) -> Dict[str, Any]:
-        """
-        添加到推送队列
-
-        Args:
-            hotspot_id: 热点ID
-            report_id: 报告ID
-            channels: 推送渠道
-
-        Returns:
-            包含 success, push_id, message 的字典
-        """
-        async with session.pg_pool.acquire() as conn:
-            # 获取报告的优先级和分数
-            report = await conn.fetchrow(
-                "SELECT priority, score FROM business_reports WHERE id = $1", report_id
-            )
-
-            if not report:
-                raise ValueError(f"报告 {report_id} 不存在")
-
-            # 插入推送队列
-            push_id = await conn.fetchval(
-                """
-                INSERT INTO push_queue (
-                    hotspot_id, report_id, priority, score, channels, scheduled_at
-                )
-                VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
-                RETURNING id
-                """,
-                hotspot_id,
-                report_id,
-                report["priority"],
-                report["score"],
-                json.dumps(channels),
-            )
-
-            return {
-                "success": True,
-                "push_id": push_id,
-                "message": f"已添加到推送队列 (ID: {push_id})",
-            }
-
-    async def get_pending_push_items(self, limit: int = 10) -> List[PushQueueItem]:
-        """
-        获取待推送的报告（按优先级和分数排序）
-
-        Args:
-            limit: 返回数量限制
-
-        Returns:
-            推送队列项列表
-        """
-        async with session.pg_pool.acquire() as conn:
-            # 获取上次推送时间，确保间隔 >= 2小时
-            last_push = await conn.fetchval(
-                """
-                SELECT MAX(sent_at)
-                FROM push_queue
-                WHERE status = 'sent'
-                """
-            )
-
-            two_hours_ago = datetime.now() - timedelta(hours=2)
-            can_push = last_push is None or last_push < two_hours_ago
-
-            if not can_push:
-                return []
-
-            # 查询待推送项
-            records = await conn.fetch(
-                """
-                SELECT
-                    pq.*,
-                    h.keyword,
-                    br.report
-                FROM push_queue pq
-                JOIN hotspots h ON pq.hotspot_id = h.id
-                JOIN business_reports br ON pq.report_id = br.id
-                WHERE pq.status = 'pending'
-                ORDER BY
-                    CASE pq.priority
-                        WHEN 'high' THEN 1
-                        WHEN 'medium' THEN 2
-                        WHEN 'low' THEN 3
-                    END,
-                    pq.score DESC
-                LIMIT $1
-                """,
-                limit,
-            )
-
-            return [
-                PushQueueItem(
-                    id=r["id"],
-                    hotspot_id=r["hotspot_id"],
-                    report_id=r["report_id"],
-                    priority=Priority(r["priority"]),
-                    score=float(r["score"]),
-                    status=PushStatus(r["status"]),
-                    channels=json.loads(r["channels"])
-                    if isinstance(r["channels"], str)
-                    else r["channels"],
-                    scheduled_at=r["scheduled_at"],
-                    sent_at=r["sent_at"],
-                    retry_count=r["retry_count"],
-                    error_message=r["error_message"],
-                    created_at=r["created_at"],
-                    updated_at=r["updated_at"],
-                    keyword=r["keyword"],
-                    report=BusinessReportContent.model_validate_json(r["report"])
-                    if isinstance(r["report"], str)
-                    else BusinessReportContent.model_validate(r["report"]),
-                )
-                for r in records
-            ]
 
     async def list_hotspots(
         self,
@@ -1586,6 +1465,54 @@ class HotspotService:
                 "items": items,
             }
 
+    async def reject_hotspot(
+        self, hotspot_id: int, rejection_reason: str
+    ) -> Dict[str, Any]:
+        """
+        拒绝热点并记录拒绝原因
+
+        Args:
+            hotspot_id: 热点ID
+            rejection_reason: 拒绝原因
+
+        Returns:
+            包含 success, message, hotspot_id, old_status 的字典
+
+        Raises:
+            ValueError: 如果热点不存在
+        """
+        async with session.pg_pool.acquire() as conn:
+            # 获取当前热点状态
+            record = await conn.fetchrow(
+                "SELECT status FROM hotspots WHERE id = $1", hotspot_id
+            )
+
+            if not record:
+                raise ValueError(f"热点 {hotspot_id} 不存在")
+
+            old_status = record["status"]
+
+            # 更新为 rejected 状态并记录拒绝原因和时间
+            await conn.execute(
+                """
+                UPDATE hotspots
+                SET status = $1,
+                    rejection_reason = $2,
+                    rejected_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $3
+                """,
+                HotspotStatus.REJECTED.value,
+                rejection_reason,
+                hotspot_id,
+            )
+
+            return {
+                "success": True,
+                "message": f"热点已拒绝: {rejection_reason}",
+                "hotspot_id": hotspot_id,
+                "old_status": old_status,
+            }
 
 # 全局热点服务实例
 hotspot_service = HotspotService()

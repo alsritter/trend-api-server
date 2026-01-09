@@ -19,9 +19,6 @@ from app.schemas.hotspot import (
     CheckHotspotResponse,
     AddBusinessReportRequest,
     AddBusinessReportResponse,
-    AddToPushQueueRequest,
-    AddToPushQueueResponse,
-    GetPendingPushResponse,
     ListHotspotsResponse,
     DeleteHotspotResponse,
     GetClusterHotspotsResponse,
@@ -38,6 +35,8 @@ from app.schemas.hotspot import (
     PlatformContents,
     HotspotStatus,
     HotspotDetail,
+    RejectHotspotRequest,
+    RejectHotspotResponse,
 )
 
 # 配置日志
@@ -129,61 +128,6 @@ async def add_business_report(request: AddBusinessReportRequest):
     except Exception as e:
         logger.error(
             f"添加商业报告时发生错误 - hotspot_id: {request.hotspot_id}, "
-            f"error: {str(e)}, traceback: {traceback.format_exc()}"
-        )
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/push-queue", response_model=AddToPushQueueResponse)
-async def add_to_push_queue(request: AddToPushQueueRequest):
-    """
-    添加到推送队列
-
-    用于第三阶段：
-    - 将商业报告加入推送队列
-    - 自动设置优先级和分数
-    """
-    try:
-        result = await hotspot_service.add_to_push_queue(
-            hotspot_id=request.hotspot_id,
-            report_id=request.report_id,
-            channels=request.channels,
-        )
-        return AddToPushQueueResponse(
-            success=result["success"],
-            push_id=result["push_id"],
-            message=result["message"],
-        )
-    except ValueError as e:
-        logger.error(
-            f"添加到推送队列失败(未找到) - hotspot_id: {request.hotspot_id}, "
-            f"report_id: {request.report_id}, error: {str(e)}"
-        )
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        logger.error(
-            f"添加到推送队列时发生错误 - hotspot_id: {request.hotspot_id}, "
-            f"report_id: {request.report_id}, error: {str(e)}, traceback: {traceback.format_exc()}"
-        )
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/push-queue/pending", response_model=GetPendingPushResponse)
-async def get_pending_push_items(
-    limit: int = Query(default=10, ge=1, le=50, description="返回数量限制"),
-):
-    """
-    获取待推送的报告
-
-    返回按优先级和分数排序的待推送项
-    自动检查推送间隔（>=2小时）
-    """
-    try:
-        items = await hotspot_service.get_pending_push_items(limit)
-        return GetPendingPushResponse(success=True, items=items, count=len(items))
-    except Exception as e:
-        logger.error(
-            f"获取待推送项时发生错误 - limit: {limit}, "
             f"error: {str(e)}, traceback: {traceback.format_exc()}"
         )
         raise HTTPException(status_code=500, detail=str(e))
@@ -700,5 +644,55 @@ async def get_hotspot_contents(
         logger.error(
             f"获取热点内容时发生错误 - hotspot_id: {hotspot_id}, "
             f"error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{hotspot_id}/reject", response_model=RejectHotspotResponse)
+async def reject_hotspot(hotspot_id: int, request: RejectHotspotRequest):
+    """
+    拒绝热点并记录拒绝原因
+
+    功能：
+    - 将热点状态更新为 rejected
+    - 记录拒绝原因和拒绝时间
+    - 可用于人工审核时标记不合适的热点
+
+    参数：
+    - hotspot_id: 热点ID
+    - rejection_reason: 拒绝原因（必填，1-500字符）
+
+    返回：
+    - success: 是否成功
+    - message: 消息
+    - hotspot_id: 热点ID
+    - old_status: 旧的状态
+
+    使用场景：
+    - 人工审核时拒绝不合适的热点
+    - AI分析后标记低价值热点
+    - 内容质量不符合要求的热点
+    """
+    try:
+        result = await hotspot_service.reject_hotspot(
+            hotspot_id=hotspot_id,
+            rejection_reason=request.rejection_reason,
+        )
+        return RejectHotspotResponse(
+            success=result["success"],
+            message=result["message"],
+            hotspot_id=result["hotspot_id"],
+            old_status=result["old_status"],
+        )
+    except ValueError as e:
+        logger.error(
+            f"拒绝热点失败(未找到) - hotspot_id: {hotspot_id}, "
+            f"rejection_reason: {request.rejection_reason}, error: {str(e)}"
+        )
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(
+            f"拒绝热点时发生错误 - hotspot_id: {hotspot_id}, "
+            f"rejection_reason: {request.rejection_reason}, error: {str(e)}, traceback: {traceback.format_exc()}"
         )
         raise HTTPException(status_code=500, detail=str(e))

@@ -199,54 +199,6 @@ class BusinessReportInfo(BaseModel):
     created_at: datetime
 
 
-# ==================== 推送队列相关 ====================
-class AddToPushQueueRequest(BaseModel):
-    """添加到推送队列请求"""
-
-    hotspot_id: int = Field(..., description="热点ID")
-    report_id: int = Field(..., description="报告ID")
-    channels: List[str] = Field(
-        default_factory=lambda: ["email"], description="推送渠道"
-    )
-
-
-class AddToPushQueueResponse(BaseModel):
-    """添加到推送队列响应"""
-
-    success: bool
-    push_id: int
-    message: str
-
-
-class PushQueueItem(BaseModel):
-    """推送队列项"""
-
-    id: int
-    hotspot_id: int
-    report_id: int
-    priority: Priority
-    score: float
-    status: PushStatus
-    channels: List[str]
-    scheduled_at: Optional[datetime]
-    sent_at: Optional[datetime]
-    retry_count: int
-    error_message: Optional[str]
-    created_at: datetime
-    updated_at: datetime
-    # 额外关联信息
-    keyword: Optional[str] = None
-    report: Optional[BusinessReportContent] = None
-
-
-class GetPendingPushResponse(BaseModel):
-    """获取待推送报告响应"""
-
-    success: bool
-    items: List[PushQueueItem]
-    count: int
-
-
 # ==================== 热点管理相关 ====================
 class HotspotDetail(BaseModel):
     """热点详细信息"""
@@ -268,6 +220,8 @@ class HotspotDetail(BaseModel):
     is_filtered: bool
     filter_reason: Optional[str]
     filtered_at: Optional[datetime]
+    rejection_reason: Optional[str] = Field(None, description="被拒绝的理由")
+    rejected_at: Optional[datetime] = Field(None, description="被拒绝的时间")
     created_at: datetime
     updated_at: datetime
     # AI 分析详细信息
@@ -609,3 +563,34 @@ class GetHotspotContentsResponse(BaseModel):
     platforms: List[PlatformContents] = Field(..., description="各平台的完整内容和评论")
     total_contents: int = Field(..., description="所有平台的内容总数")
     total_comments: int = Field(..., description="所有平台的评论总数")
+
+
+# ==================== 拒绝热词相关 ====================
+class RejectHotspotRequest(BaseModel):
+    """拒绝热词请求"""
+
+    rejection_reason: str = Field(..., description="拒绝原因", min_length=1, max_length=500)
+
+
+class RejectHotspotResponse(BaseModel):
+    """拒绝热词响应"""
+
+    success: bool
+    message: str
+    hotspot_id: int
+    old_status: str = Field(..., description="旧状态")
+
+
+class RejectedHotspotItem(BaseModel):
+    """被拒绝的热词列表项"""
+
+    id: int
+    keyword: str
+    status: HotspotStatus
+    rejection_reason: Optional[str]
+    rejected_at: Optional[datetime]
+    first_seen_at: datetime
+    last_seen_at: datetime
+    platforms: List[PlatformInfo]
+    created_at: datetime
+    updated_at: datetime

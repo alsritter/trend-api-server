@@ -20,6 +20,7 @@ from app.api.v1 import (
     vectors,
     hotspots,
     clusters,
+    push,
 )
 
 # 全局任务控制
@@ -278,6 +279,7 @@ app.include_router(proxy.router, prefix="/api/v1/proxy", tags=["Proxy"])
 app.include_router(vectors.router, prefix="/api/v1/vectors", tags=["Vectors"])
 app.include_router(hotspots.router, prefix="/api/v1/hotspots", tags=["Hotspots"])
 app.include_router(clusters.router, prefix="/api/v1/clusters", tags=["Clusters"])
+app.include_router(push.router, prefix="/api/v1/push", tags=["Push"])
 
 
 # 静态文件目录配置
