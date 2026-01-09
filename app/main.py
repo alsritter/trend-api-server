@@ -27,35 +27,34 @@ timeout_check_task = None
 stop_timeout_check = False
 
 # 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 
 
 async def log_request_body_middleware(request: Request, call_next):
     """记录请求体的中间件，特别是在出现验证错误时"""
+    body_data = None
+    
     # 只记录 POST/PUT/PATCH 请求
     if request.method in ["POST", "PUT", "PATCH"]:
         # 读取请求体
-        body = await request.body()
-
-        # 保存原始请求体以便后续处理
-        async def receive():
-            return {"type": "http.request", "body": body}
-
-        request._receive = receive
+        body_bytes = await request.body()
 
         # 尝试解析 JSON
         try:
-            if body:
-                body_json = json.loads(body.decode("utf-8"))
-                request.state.body_json = body_json
+            if body_bytes:
+                body_data = json.loads(body_bytes.decode("utf-8"))
+                request.state.body_json = body_data
             else:
                 request.state.body_json = None
         except Exception:
             request.state.body_json = None
 
-    # 记录请求信息（POST/PUT/PATCH）
-    if request.method in ["POST", "PUT", "PATCH"]:
-        body_data = getattr(request.state, "body_json", None)
+        # 记录请求信息
         logger.info(
             f"Request - {request.method} {request.url.path} - "
             f"Body: {json.dumps(body_data, ensure_ascii=False) if body_data else 'None'}"
