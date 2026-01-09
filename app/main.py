@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -6,6 +6,8 @@ from contextlib import asynccontextmanager
 import os
 import asyncio
 from datetime import datetime
+import logging
+import json
 from app.config import settings
 from app.db.session import init_db, close_db, init_vector_db, close_vector_db
 from app.api.v1 import (
@@ -23,6 +25,54 @@ from app.api.v1 import (
 # 全局任务控制
 timeout_check_task = None
 stop_timeout_check = False
+
+# 配置日志
+logger = logging.getLogger(__name__)
+
+
+async def log_request_body_middleware(request: Request, call_next):
+    """记录请求体的中间件，特别是在出现验证错误时"""
+    # 只记录 POST/PUT/PATCH 请求
+    if request.method in ["POST", "PUT", "PATCH"]:
+        # 读取请求体
+        body = await request.body()
+
+        # 保存原始请求体以便后续处理
+        async def receive():
+            return {"type": "http.request", "body": body}
+
+        request._receive = receive
+
+        # 尝试解析 JSON
+        try:
+            if body:
+                body_json = json.loads(body.decode("utf-8"))
+                request.state.body_json = body_json
+            else:
+                request.state.body_json = None
+        except Exception:
+            request.state.body_json = None
+
+    # 记录请求信息（POST/PUT/PATCH）
+    if request.method in ["POST", "PUT", "PATCH"]:
+        body_data = getattr(request.state, "body_json", None)
+        logger.info(
+            f"Request - {request.method} {request.url.path} - "
+            f"Body: {json.dumps(body_data, ensure_ascii=False) if body_data else 'None'}"
+        )
+
+    # 调用下一个中间件或路由处理器
+    response = await call_next(request)
+
+    # 如果响应状态码是 422，额外记录错误
+    if response.status_code == 422:
+        body_data = getattr(request.state, "body_json", None)
+        logger.error(
+            f"422 Unprocessable Entity - {request.method} {request.url.path} - "
+            f"Body: {json.dumps(body_data, ensure_ascii=False) if body_data else 'None'}"
+        )
+
+    return response
 
 
 async def check_timeout_tasks_background():
@@ -206,6 +256,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+# 添加请求体日志中间件（必须在 CORS 之前添加）
+app.middleware("http")(log_request_body_middleware)
 
 # CORS 中间件
 app.add_middleware(
