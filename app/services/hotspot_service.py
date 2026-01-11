@@ -1498,7 +1498,6 @@ class HotspotService:
                 UPDATE hotspots
                 SET status = $1,
                     filter_reason = $2,
-                    rejected_at = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = $3
                 """,
