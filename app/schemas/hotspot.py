@@ -9,7 +9,8 @@ class HotspotStatus(str, Enum):
 
     PENDING_VALIDATION = "pending_validation"
     VALIDATED = "validated"
-    REJECTED = "rejected"
+    REJECTED = "rejected"  # 第一阶段被拒绝（AI初筛）
+    SECOND_STAGE_REJECTED = "second_stage_rejected"  # 第二阶段被拒绝（深度分析后）
     CRAWLING = "crawling"
     CRAWLED = "crawled"
     ANALYZING = "analyzing"
@@ -220,8 +221,10 @@ class HotspotDetail(BaseModel):
     is_filtered: bool
     filter_reason: Optional[str]
     filtered_at: Optional[datetime]
-    rejection_reason: Optional[str] = Field(None, description="被拒绝的理由")
-    rejected_at: Optional[datetime] = Field(None, description="被拒绝的时间")
+    rejection_reason: Optional[str] = Field(None, description="第一阶段被拒绝的理由")
+    rejected_at: Optional[datetime] = Field(None, description="第一阶段被拒绝的时间")
+    second_stage_rejection_reason: Optional[str] = Field(None, description="第二阶段被拒绝的理由")
+    second_stage_rejected_at: Optional[datetime] = Field(None, description="第二阶段被拒绝的时间")
     created_at: datetime
     updated_at: datetime
     # AI 分析详细信息
@@ -446,6 +449,28 @@ class UpdateHotspotStatusResponse(BaseModel):
     new_status: str = Field(..., description="新状态")
 
 
+class UpdateHotspotStatusAndSetRepresentativeRequest(BaseModel):
+    """更新热词状态并设置为聚簇代表请求"""
+
+    status: HotspotStatus = Field(..., description="新的状态")
+    set_as_representative: bool = Field(
+        default=True, description="是否设置为聚簇代表（如果有cluster_id）"
+    )
+
+
+class UpdateHotspotStatusAndSetRepresentativeResponse(BaseModel):
+    """更新热词状态并设置为聚簇代表响应"""
+
+    success: bool
+    message: str
+    old_status: str = Field(..., description="旧状态")
+    new_status: str = Field(..., description="新状态")
+    cluster_id: Optional[int] = Field(None, description="聚簇ID")
+    is_cluster_representative: bool = Field(
+        default=False, description="是否为聚簇代表"
+    )
+
+
 class MarkOutdatedHotspotsResponse(BaseModel):
     """标记过时热词响应"""
 
@@ -567,13 +592,28 @@ class GetHotspotContentsResponse(BaseModel):
 
 # ==================== 拒绝热词相关 ====================
 class RejectHotspotRequest(BaseModel):
-    """拒绝热词请求"""
+    """拒绝热词请求（第一阶段）"""
 
     rejection_reason: str = Field(..., description="拒绝原因", min_length=1, max_length=500)
 
 
 class RejectHotspotResponse(BaseModel):
-    """拒绝热词响应"""
+    """拒绝热词响应（第一阶段）"""
+
+    success: bool
+    message: str
+    hotspot_id: int
+    old_status: str = Field(..., description="旧状态")
+
+
+class RejectSecondStageRequest(BaseModel):
+    """拒绝热词请求（第二阶段）"""
+
+    rejection_reason: str = Field(..., description="第二阶段拒绝原因", min_length=1, max_length=500)
+
+
+class RejectSecondStageResponse(BaseModel):
+    """拒绝热词响应（第二阶段）"""
 
     success: bool
     message: str

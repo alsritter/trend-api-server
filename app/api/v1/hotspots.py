@@ -27,6 +27,8 @@ from app.schemas.hotspot import (
     ListValidatedHotspotsResponse,
     UpdateHotspotStatusRequest,
     UpdateHotspotStatusResponse,
+    UpdateHotspotStatusAndSetRepresentativeRequest,
+    UpdateHotspotStatusAndSetRepresentativeResponse,
     MarkOutdatedHotspotsResponse,
     TriggerCrawlRequest,
     TriggerCrawlResponse,
@@ -37,6 +39,8 @@ from app.schemas.hotspot import (
     HotspotDetail,
     RejectHotspotRequest,
     RejectHotspotResponse,
+    RejectSecondStageRequest,
+    RejectSecondStageResponse,
 )
 
 # 配置日志
@@ -362,6 +366,67 @@ async def update_hotspot_status(hotspot_id: int, request: UpdateHotspotStatusReq
     except Exception as e:
         logger.error(
             f"更新热词状态时发生错误 - hotspot_id: {hotspot_id}, "
+            f"new_status: {request.status}, error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch(
+    "/{hotspot_id}/status-and-representative",
+    response_model=UpdateHotspotStatusAndSetRepresentativeResponse,
+)
+async def update_hotspot_status_and_set_representative(
+    hotspot_id: int, request: UpdateHotspotStatusAndSetRepresentativeRequest
+):
+    """
+    更新热词状态并设置为聚簇代表
+
+    功能：
+    - 手动更新热词的状态
+    - 如果热词有 cluster_id，可选择将其设置为聚簇的代表热词（更新 cluster 的 selected_hotspot_id）
+    - 支持所有状态的更新
+
+    参数：
+    - hotspot_id: 热词ID
+    - status: 新的状态
+    - set_as_representative: 是否设置为聚簇代表（默认为 True）
+
+    返回：
+    - success: 是否成功
+    - message: 消息
+    - old_status: 旧状态
+    - new_status: 新状态
+    - cluster_id: 聚簇ID（如果有）
+    - is_cluster_representative: 是否为聚簇代表
+
+    常用场景：
+    - 快速设置某个热词为 validated 状态，并作为聚簇代表
+    - 将某个热词标记为 crawling 并设为代表
+    - 批量管理聚簇时快速切换代表热词
+    """
+    try:
+        result = await hotspot_service.update_hotspot_status_and_set_representative(
+            hotspot_id=hotspot_id,
+            new_status=request.status,
+            set_as_representative=request.set_as_representative,
+        )
+        return UpdateHotspotStatusAndSetRepresentativeResponse(
+            success=result["success"],
+            message=result["message"],
+            old_status=result["old_status"],
+            new_status=result["new_status"],
+            cluster_id=result["cluster_id"],
+            is_cluster_representative=result["is_cluster_representative"],
+        )
+    except ValueError as e:
+        logger.error(
+            f"更新热词状态并设置代表失败(未找到) - hotspot_id: {hotspot_id}, "
+            f"new_status: {request.status}, error: {str(e)}"
+        )
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(
+            f"更新热词状态并设置代表时发生错误 - hotspot_id: {hotspot_id}, "
             f"new_status: {request.status}, error: {str(e)}, traceback: {traceback.format_exc()}"
         )
         raise HTTPException(status_code=500, detail=str(e))
@@ -696,3 +761,54 @@ async def reject_hotspot(hotspot_id: int, request: RejectHotspotRequest):
             f"rejection_reason: {request.rejection_reason}, error: {str(e)}, traceback: {traceback.format_exc()}"
         )
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{hotspot_id}/reject-second-stage", response_model=RejectSecondStageResponse)
+async def reject_second_stage(hotspot_id: int, request: RejectSecondStageRequest):
+    """
+    第二阶段拒绝热点并记录拒绝原因
+
+    功能：
+    - 将热点状态更新为 second_stage_rejected
+    - 记录第二阶段拒绝原因和拒绝时间
+    - 用于热点通过了第一阶段初筛，但在第二阶段深度分析后被拒绝
+
+    参数：
+    - hotspot_id: 热点ID
+    - rejection_reason: 第二阶段拒绝原因（必填，1-500字符）
+
+    返回：
+    - success: 是否成功
+    - message: 消息
+    - hotspot_id: 热点ID
+    - old_status: 旧的状态
+
+    使用场景：
+    - 人工深度审核后拒绝
+    - 第二阶段AI分析后发现不符合商业价值
+    - 内容深度分析后发现质量问题
+    """
+    try:
+        result = await hotspot_service.reject_second_stage(
+            hotspot_id=hotspot_id,
+            rejection_reason=request.rejection_reason,
+        )
+        return RejectSecondStageResponse(
+            success=result["success"],
+            message=result["message"],
+            hotspot_id=result["hotspot_id"],
+            old_status=result["old_status"],
+        )
+    except ValueError as e:
+        logger.error(
+            f"第二阶段拒绝热点失败(未找到) - hotspot_id: {hotspot_id}, "
+            f"rejection_reason: {request.rejection_reason}, error: {str(e)}"
+        )
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(
+            f"第二阶段拒绝热点时发生错误 - hotspot_id: {hotspot_id}, "
+            f"rejection_reason: {request.rejection_reason}, error: {str(e)}, traceback: {traceback.format_exc()}"
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+

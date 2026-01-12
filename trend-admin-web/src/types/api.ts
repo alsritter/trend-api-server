@@ -296,14 +296,16 @@ export interface ListCollectionsResponse {
 
 // 热点状态枚举
 export type HotspotStatus =
-  | 'pending_validation'  // 等待持续性验证
-  | 'validated'           // 已验证有持续性
-  | 'rejected'            // 已过滤（无商业价值）
-  | 'crawling'            // 爬虫进行中
-  | 'crawled'             // 爬取完成
-  | 'analyzing'           // 商业分析中
-  | 'analyzed'            // 分析完成
-  | 'archived';           // 已归档
+  | 'pending_validation'      // 等待持续性验证
+  | 'validated'               // 已验证有持续性
+  | 'rejected'                // 已拒绝（第一阶段-初筛）
+  | 'second_stage_rejected'   // 已拒绝（第二阶段-深度分析）
+  | 'crawling'                // 爬虫进行中
+  | 'crawled'                 // 爬取完成
+  | 'analyzing'               // 商业分析中
+  | 'analyzed'                // 分析完成
+  | 'archived'                // 已归档
+  | 'outdated';               // 已过时
 
 // 优先级枚举
 export type Priority = 'high' | 'medium' | 'low';
@@ -356,6 +358,10 @@ export interface HotspotDetail {
   is_filtered: boolean;
   filter_reason?: string;
   filtered_at?: string;
+  rejection_reason?: string;
+  rejected_at?: string;
+  second_stage_rejection_reason?: string;
+  second_stage_rejected_at?: string;
   created_at: string;
   updated_at: string;
   // AI 分析详细信息
@@ -646,3 +652,31 @@ export interface RemoveHotspotFromClusterResponse {
   message: string;
 }
 
+// 更新热点状态请求
+export interface UpdateHotspotStatusRequest {
+  status: HotspotStatus;
+}
+
+// 更新热点状态响应
+export interface UpdateHotspotStatusResponse {
+  success: boolean;
+  message: string;
+  old_status: HotspotStatus;
+  new_status: HotspotStatus;
+}
+
+// 更新热点状态并设置为聚簇代表请求
+export interface UpdateHotspotStatusAndSetRepresentativeRequest {
+  status: HotspotStatus;
+  set_as_representative?: boolean;
+}
+
+// 更新热点状态并设置为聚簇代表响应
+export interface UpdateHotspotStatusAndSetRepresentativeResponse {
+  success: boolean;
+  message: string;
+  old_status: HotspotStatus;
+  new_status: HotspotStatus;
+  cluster_id?: number;
+  is_cluster_representative: boolean;
+}

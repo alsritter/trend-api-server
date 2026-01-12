@@ -16,6 +16,10 @@ import type {
   LinkHotspotResponse,
   HotspotDetail,
   GetClusterHotspotsResponse,
+  UpdateHotspotStatusRequest,
+  UpdateHotspotStatusResponse,
+  UpdateHotspotStatusAndSetRepresentativeRequest,
+  UpdateHotspotStatusAndSetRepresentativeResponse,
 } from '@/types/api';
 
 const BASE_PATH = '/api/v1/hotspots';
@@ -95,5 +99,25 @@ export const hotspotsApi = {
    */
   getClusterHotspots: async (clusterId: number): Promise<GetClusterHotspotsResponse> => {
     return apiClient.get(`${BASE_PATH}/cluster/${clusterId}/hotspots`);
+  },
+
+  /**
+   * 更新热点状态
+   */
+  updateStatus: async (
+    hotspotId: number,
+    data: UpdateHotspotStatusRequest
+  ): Promise<UpdateHotspotStatusResponse> => {
+    return apiClient.patch(`${BASE_PATH}/${hotspotId}/status`, data);
+  },
+
+  /**
+   * 更新热点状态并设置为聚簇代表
+   */
+  updateStatusAndSetRepresentative: async (
+    hotspotId: number,
+    data: UpdateHotspotStatusAndSetRepresentativeRequest
+  ): Promise<UpdateHotspotStatusAndSetRepresentativeResponse> => {
+    return apiClient.patch(`${BASE_PATH}/${hotspotId}/status-and-representative`, data);
   },
 };

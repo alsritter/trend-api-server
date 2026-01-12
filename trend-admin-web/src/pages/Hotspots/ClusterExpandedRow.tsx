@@ -16,7 +16,8 @@ import {
 import {
   DeleteOutlined,
   LinkOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  EyeOutlined
 } from "@ant-design/icons";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { hotspotsApi } from "@/api/hotspots";
@@ -26,6 +27,7 @@ import dayjs from "dayjs";
 import { STATUS_MAP, PLATFORM_MAP } from "./constants";
 import { useState, useEffect } from "react";
 import { formatDateTime } from "@/utils/format";
+import { HotspotDetailDrawer } from "./HotspotDetailDrawer";
 
 const { Text } = Typography;
 
@@ -39,6 +41,8 @@ export function ClusterExpandedRow({ clusterId }: ClusterExpandedRowProps) {
   const [contentTotals, setContentTotals] = useState<Record<number, number>>(
     {}
   );
+  const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [selectedHotspot, setSelectedHotspot] = useState<HotspotDetail | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["clusterHotspots", clusterId],
@@ -278,6 +282,19 @@ export function ClusterExpandedRow({ clusterId }: ClusterExpandedRowProps) {
         style={{ marginBottom: 16 }}
         extra={
           <Space size="small">
+            <Tooltip title="查看详情并快速切换状态">
+              <Button
+                type="primary"
+                size="small"
+                icon={<EyeOutlined />}
+                onClick={() => {
+                  setSelectedHotspot(hotspot);
+                  setDetailDrawerVisible(true);
+                }}
+              >
+                详情/切换状态
+              </Button>
+            </Tooltip>
             <Tooltip title={isExpanded ? "收起内容" : "查看爬取内容"}>
               <Button
                 type="text"
@@ -513,6 +530,21 @@ export function ClusterExpandedRow({ clusterId }: ClusterExpandedRowProps) {
           {(data?.items || []).map(renderHotspotDetail)}
         </Space>
       )}
+      
+      {/* 热点详情和状态切换抽屉 */}
+      <HotspotDetailDrawer
+        visible={detailDrawerVisible}
+        hotspot={selectedHotspot}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setSelectedHotspot(null);
+        }}
+        onUpdate={() => {
+          // 刷新热点列表
+          queryClient.invalidateQueries({ queryKey: ["clusterHotspots", clusterId] });
+          queryClient.invalidateQueries({ queryKey: ["clusters"] });
+        }}
+      />
     </div>
   );
 }

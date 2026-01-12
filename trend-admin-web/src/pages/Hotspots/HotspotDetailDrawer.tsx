@@ -1,7 +1,10 @@
-import { Drawer, Descriptions, Tag, Space, Card, Typography } from "antd";
-import type { HotspotDetail } from "@/types/api";
+import { Drawer, Descriptions, Tag, Space, Card, Typography, Button, Dropdown, message } from "antd";
+import type { HotspotDetail, HotspotStatus } from "@/types/api";
 import dayjs from "dayjs";
 import { STATUS_MAP, PLATFORM_MAP } from "./constants";
+import { hotspotsApi } from "@/api/hotspots";
+import { useState } from "react";
+import { DownOutlined } from "@ant-design/icons";
 
 const { Text } = Typography;
 
@@ -9,16 +12,81 @@ interface HotspotDetailDrawerProps {
   visible: boolean;
   hotspot: HotspotDetail | null;
   onClose: () => void;
+  onUpdate?: () => void; // 更新成功后的回调
 }
 
 export function HotspotDetailDrawer({
   visible,
   hotspot,
-  onClose
+  onClose,
+  onUpdate
 }: HotspotDetailDrawerProps) {
+  const [loading, setLoading] = useState(false);
+
+  // 快速状态切换选项
+  const statusOptions = [
+    { key: "validated", label: "已验证", color: "green" },
+    { key: "crawling", label: "爬取中", color: "blue" },
+    { key: "crawled", label: "已爬取", color: "cyan" },
+    { key: "analyzing", label: "分析中", color: "purple" },
+    { key: "analyzed", label: "已分析", color: "geekblue" },
+    { key: "archived", label: "已归档", color: "default" },
+  ];
+
+  // 处理状态更新
+  const handleStatusChange = async (newStatus: HotspotStatus, setAsRepresentative: boolean = true) => {
+    if (!hotspot) return;
+
+    try {
+      setLoading(true);
+      const response = await hotspotsApi.updateStatusAndSetRepresentative(hotspot.id, {
+        status: newStatus,
+        set_as_representative: setAsRepresentative,
+      });
+
+      if (response.success) {
+        message.success(response.message, 1500);
+        onUpdate?.(); // 触发父组件刷新
+      } else {
+        message.error("状态更新失败");
+      }
+    } catch (error: any) {
+      message.error(error.message || "状态更新失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 构建下拉菜单项
+  const menuItems = statusOptions.map((option) => ({
+    key: option.key,
+    label: (
+      <span>
+        <Tag color={option.color}>{option.label}</Tag>
+        {hotspot?.cluster_id && <span style={{ fontSize: 12, color: "#999" }}>(设为代表)</span>}
+      </span>
+    ),
+    onClick: () => handleStatusChange(option.key as HotspotStatus),
+  }));
+
   return (
     <Drawer
-      title="热点详情"
+      title={
+        <Space>
+          <span>热点详情</span>
+          {hotspot && (
+            <Dropdown
+              menu={{ items: menuItems }}
+              placement="bottomLeft"
+              disabled={loading}
+            >
+              <Button type="primary" size="small" loading={loading}>
+                快速切换状态 <DownOutlined />
+              </Button>
+            </Dropdown>
+          )}
+        </Space>
+      }
       placement="right"
       width={800}
       open={visible}
@@ -136,6 +204,35 @@ export function HotspotDetailDrawer({
               {hotspot.filter_reason}
             </Descriptions.Item>
           )}
+          
+          {/* 第一阶段拒绝信息 */}
+          {hotspot.rejection_reason && (
+            <Descriptions.Item label="第一阶段拒绝原因">
+              <Card size="small" style={{ backgroundColor: "#fff1f0" }}>
+                🚫 {hotspot.rejection_reason}
+              </Card>
+            </Descriptions.Item>
+          )}
+          {hotspot.rejected_at && (
+            <Descriptions.Item label="第一阶段拒绝时间">
+              {dayjs(hotspot.rejected_at).format("YYYY-MM-DD HH:mm:ss")}
+            </Descriptions.Item>
+          )}
+          
+          {/* 第二阶段拒绝信息 */}
+          {hotspot.second_stage_rejection_reason && (
+            <Descriptions.Item label="第二阶段拒绝原因">
+              <Card size="small" style={{ backgroundColor: "#fff7e6" }}>
+                ⛔ {hotspot.second_stage_rejection_reason}
+              </Card>
+            </Descriptions.Item>
+          )}
+          {hotspot.second_stage_rejected_at && (
+            <Descriptions.Item label="第二阶段拒绝时间">
+              {dayjs(hotspot.second_stage_rejected_at).format("YYYY-MM-DD HH:mm:ss")}
+            </Descriptions.Item>
+          )}
+          
           <Descriptions.Item label="爬取次数">
             {hotspot.crawl_count}
           </Descriptions.Item>

@@ -2,13 +2,14 @@
 export const STATUS_MAP: Record<string, { label: string; color: string }> = {
   pending_validation: { label: "待验证", color: "orange" },
   validated: { label: "已验证", color: "green" },
-  rejected: { label: "已拒绝", color: "red" },
+  rejected: { label: "已拒绝（初筛）", color: "red" },
+  second_stage_rejected: { label: "已拒绝（第二阶段）", color: "volcano" },
   crawling: { label: "爬取中", color: "blue" },
   crawled: { label: "已爬取", color: "cyan" },
   analyzing: { label: "分析中", color: "purple" },
   analyzed: { label: "已分析", color: "geekblue" },
   archived: { label: "已归档", color: "default" },
-  outdated: { label: "已过时", color: "volcano" }
+  outdated: { label: "已过时", color: "magenta" }
 };
 
 // 平台映射

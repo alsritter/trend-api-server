@@ -456,3 +456,7 @@ POST {{baseUrl}}/api/v1/hotspots/mark-outdated
 
 ### 获取 contents
 GET {{baseUrl}}/api/v1/hotspots/838/contents
+
+
+### 获取 analyzing 状态的热词列表
+GET {{baseUrl}}/api/v1/hotspots/list?status=analyzing&page=1&page_size=20

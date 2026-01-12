@@ -734,6 +734,10 @@ class HotspotService:
                     is_filtered=r["is_filtered"],
                     filter_reason=r["filter_reason"],
                     filtered_at=r["filtered_at"],
+                    rejection_reason=r.get("rejection_reason"),
+                    rejected_at=r.get("rejected_at"),
+                    second_stage_rejection_reason=r.get("second_stage_rejection_reason"),
+                    second_stage_rejected_at=r.get("second_stage_rejected_at"),
                     created_at=r["created_at"],
                     updated_at=r["updated_at"],
                     # AI 分析详细信息
@@ -817,6 +821,10 @@ class HotspotService:
                 is_filtered=r["is_filtered"],
                 filter_reason=r["filter_reason"],
                 filtered_at=r["filtered_at"],
+                rejection_reason=r.get("rejection_reason"),
+                rejected_at=r.get("rejected_at"),
+                second_stage_rejection_reason=r.get("second_stage_rejection_reason"),
+                second_stage_rejected_at=r.get("second_stage_rejected_at"),
                 created_at=r["created_at"],
                 updated_at=r["updated_at"],
                 # AI 分析详细信息
@@ -875,6 +883,10 @@ class HotspotService:
                     is_filtered=r["is_filtered"],
                     filter_reason=r["filter_reason"],
                     filtered_at=r["filtered_at"],
+                    rejection_reason=r.get("rejection_reason"),
+                    rejected_at=r.get("rejected_at"),
+                    second_stage_rejection_reason=r.get("second_stage_rejection_reason"),
+                    second_stage_rejected_at=r.get("second_stage_rejected_at"),
                     created_at=r["created_at"],
                     updated_at=r["updated_at"],
                     # AI 分析详细信息
@@ -1232,6 +1244,63 @@ class HotspotService:
                 "new_status": new_status.value,
             }
 
+    async def update_hotspot_status_and_set_representative(
+        self, hotspot_id: int, new_status: HotspotStatus, set_as_representative: bool = True
+    ) -> Dict[str, Any]:
+        """
+        更新热词状态，并可选设置为聚簇代表
+
+        Args:
+            hotspot_id: 热词ID
+            new_status: 新的状态
+            set_as_representative: 是否设置为聚簇代表（如果有cluster_id）
+
+        Returns:
+            包含 success, message, old_status, new_status, cluster_id, is_cluster_representative 的字典
+        """
+        async with session.pg_pool.acquire() as conn:
+            # 1. 获取当前热词信息
+            hotspot_record = await conn.fetchrow(
+                "SELECT id, keyword, status, cluster_id FROM hotspots WHERE id = $1",
+                hotspot_id,
+            )
+
+            if not hotspot_record:
+                raise ValueError(f"热词 {hotspot_id} 不存在")
+
+            old_status = hotspot_record["status"]
+            cluster_id = hotspot_record["cluster_id"]
+            is_cluster_representative = False
+
+            # 2. 更新热词状态
+            await conn.execute(
+                "UPDATE hotspots SET status = $1, updated_at = NOW() WHERE id = $2",
+                new_status.value,
+                hotspot_id,
+            )
+
+            # 3. 如果有 cluster_id 且需要设置为代表，则更新 cluster 的 selected_hotspot_id
+            if cluster_id and set_as_representative:
+                await conn.execute(
+                    "UPDATE hotspot_clusters SET selected_hotspot_id = $1, updated_at = NOW() WHERE id = $2",
+                    hotspot_id,
+                    cluster_id,
+                )
+                is_cluster_representative = True
+
+            message = f"热词 '{hotspot_record['keyword']}' 状态已更新: {old_status} -> {new_status.value}"
+            if is_cluster_representative:
+                message += f"，并已设置为聚簇 {cluster_id} 的代表热词"
+
+            return {
+                "success": True,
+                "message": message,
+                "old_status": old_status,
+                "new_status": new_status.value,
+                "cluster_id": cluster_id,
+                "is_cluster_representative": is_cluster_representative,
+            }
+
     async def mark_outdated_hotspots(self, days: int = 2) -> Dict[str, Any]:
         """
         标记过时的热词（超过指定天数未更新的热词）
@@ -1469,7 +1538,7 @@ class HotspotService:
         self, hotspot_id: int, rejection_reason: str
     ) -> Dict[str, Any]:
         """
-        拒绝热点并记录拒绝原因
+        拒绝热点并记录拒绝原因（第一阶段 - AI初筛）
 
         Args:
             hotspot_id: 热点ID
@@ -1512,6 +1581,58 @@ class HotspotService:
                 "hotspot_id": hotspot_id,
                 "old_status": old_status,
             }
+
+    async def reject_second_stage(
+        self, hotspot_id: int, rejection_reason: str
+    ) -> Dict[str, Any]:
+        """
+        第二阶段拒绝热点并记录拒绝原因（深度分析后）
+
+        用于热点通过了第一阶段初筛，但在第二阶段深度分析后被拒绝的场景
+
+        Args:
+            hotspot_id: 热点ID
+            rejection_reason: 第二阶段拒绝原因
+
+        Returns:
+            包含 success, message, hotspot_id, old_status 的字典
+
+        Raises:
+            ValueError: 如果热点不存在
+        """
+        async with session.pg_pool.acquire() as conn:
+            # 获取当前热点状态
+            record = await conn.fetchrow(
+                "SELECT status FROM hotspots WHERE id = $1", hotspot_id
+            )
+
+            if not record:
+                raise ValueError(f"热点 {hotspot_id} 不存在")
+
+            old_status = record["status"]
+
+            # 更新为 second_stage_rejected 状态并记录拒绝原因和时间
+            await conn.execute(
+                """
+                UPDATE hotspots
+                SET status = $1,
+                    second_stage_rejection_reason = $2,
+                    second_stage_rejected_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $3
+                """,
+                HotspotStatus.SECOND_STAGE_REJECTED.value,
+                rejection_reason,
+                hotspot_id,
+            )
+
+            return {
+                "success": True,
+                "message": f"热点已在第二阶段被拒绝: {rejection_reason}",
+                "hotspot_id": hotspot_id,
+                "old_status": old_status,
+            }
+
 
 # 全局热点服务实例
 hotspot_service = HotspotService()
