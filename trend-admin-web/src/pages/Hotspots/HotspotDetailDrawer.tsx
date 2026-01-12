@@ -45,7 +45,7 @@ export function HotspotDetailDrawer({
       });
 
       if (response.success) {
-        message.success(response.message, 1500);
+        message.success(response.message, 1);
         onUpdate?.(); // 触发父组件刷新
       } else {
         message.error("状态更新失败");

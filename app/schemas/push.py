@@ -1,11 +1,7 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
-from app.schemas.hotspot import (
-    Priority,
-    PushStatus,
-    BusinessReportContent,
-)
+from app.schemas.hotspot import PushStatus
 
 
 # ==================== 推送队列相关 ====================
@@ -32,20 +28,9 @@ class PushQueueItem(BaseModel):
 
     id: int
     hotspot_id: int
-    report_id: int
-    priority: Priority
-    score: float
     status: PushStatus
-    channels: List[str]
-    scheduled_at: Optional[datetime]
-    sent_at: Optional[datetime]
-    retry_count: int
-    error_message: Optional[str]
     created_at: datetime
     updated_at: datetime
-    # 额外关联信息
-    keyword: Optional[str] = None
-    report: Optional[BusinessReportContent] = None
 
 
 class GetPendingPushResponse(BaseModel):
