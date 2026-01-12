@@ -478,34 +478,6 @@ export interface CheckHotspotResponse {
   message: string;
 }
 
-// 添加商业报告请求
-export interface AddBusinessReportRequest {
-  hotspot_id: number;
-  report: BusinessReportContent;
-  score: number;
-  priority: Priority;
-  product_types: string[];
-}
-
-export interface AddBusinessReportResponse {
-  success: boolean;
-  report_id: number;
-  message: string;
-}
-
-// 添加到推送队列请求
-export interface AddToPushQueueRequest {
-  hotspot_id: number;
-  report_id: number;
-  channels: string[];
-}
-
-export interface AddToPushQueueResponse {
-  success: boolean;
-  push_id: number;
-  message: string;
-}
-
 // 获取待推送项响应
 export interface GetPendingPushResponse {
   success: boolean;

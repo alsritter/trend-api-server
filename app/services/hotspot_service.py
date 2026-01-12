@@ -6,11 +6,9 @@ from app.schemas.hotspot import (
     KeywordAnalysis,
     SimilarHotspot,
     HotspotStatus,
-    Priority,
     HotspotDetail,
     PlatformInfo,
     PlatformDataInput,
-    BusinessReportContent,
 )
 import json
 
@@ -532,58 +530,6 @@ class HotspotService:
                     "hotspot_id": None,
                     "similar_hotspots": similar_hotspots,
                     "message": f"发现 {len(similar_hotspots)} 个相似热词，建议交给LLM判断",
-                }
-
-    async def add_business_report(
-        self,
-        hotspot_id: int,
-        report: BusinessReportContent,
-        score: float,
-        priority: Priority,
-        product_types: List[str],
-    ) -> Dict[str, Any]:
-        """
-        添加商业报告
-
-        Args:
-            hotspot_id: 热点ID
-            report: 报告内容
-            score: 可行性分数
-            priority: 优先级
-            product_types: 商品类型
-
-        Returns:
-            包含 success, report_id, message 的字典
-        """
-        async with session.pg_pool.acquire() as conn:
-            async with conn.transaction():
-                # 插入商业报告
-                report_id = await conn.fetchval(
-                    """
-                    INSERT INTO business_reports (
-                        hotspot_id, report, score, priority, product_types
-                    )
-                    VALUES ($1, $2, $3, $4, $5)
-                    RETURNING id
-                    """,
-                    hotspot_id,
-                    report.model_dump_json(),
-                    score,
-                    priority.value,
-                    json.dumps(product_types),
-                )
-
-                # 更新热点状态为 analyzed
-                await conn.execute(
-                    "UPDATE hotspots SET status = $1 WHERE id = $2",
-                    HotspotStatus.ANALYZED.value,
-                    hotspot_id,
-                )
-
-                return {
-                    "success": True,
-                    "report_id": report_id,
-                    "message": f"商业报告创建成功 (ID: {report_id})",
                 }
 
     async def list_hotspots(

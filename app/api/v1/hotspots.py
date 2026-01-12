@@ -17,8 +17,6 @@ from app.schemas.hotspot import (
     AddHotspotKeywordResponse,
     CheckHotspotRequest,
     CheckHotspotResponse,
-    AddBusinessReportRequest,
-    AddBusinessReportResponse,
     ListHotspotsResponse,
     DeleteHotspotResponse,
     GetClusterHotspotsResponse,
@@ -102,36 +100,6 @@ async def check_hotspot_exists(request: CheckHotspotRequest):
     except Exception as e:
         logger.error(
             f"检查热词存在性时发生错误 - keyword: {request.keyword}, "
-            f"error: {str(e)}, traceback: {traceback.format_exc()}"
-        )
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/business-report", response_model=AddBusinessReportResponse)
-async def add_business_report(request: AddBusinessReportRequest):
-    """
-    添加商业报告
-
-    用于第三阶段：
-    - 接收AI生成的商业分析报告
-    - 自动更新热点状态为 analyzed
-    """
-    try:
-        result = await hotspot_service.add_business_report(
-            hotspot_id=request.hotspot_id,
-            report=request.report,
-            score=request.score,
-            priority=request.priority,
-            product_types=request.product_types,
-        )
-        return AddBusinessReportResponse(
-            success=result["success"],
-            report_id=result["report_id"],
-            message=result["message"],
-        )
-    except Exception as e:
-        logger.error(
-            f"添加商业报告时发生错误 - hotspot_id: {request.hotspot_id}, "
             f"error: {str(e)}, traceback: {traceback.format_exc()}"
         )
         raise HTTPException(status_code=500, detail=str(e))
@@ -763,7 +731,9 @@ async def reject_hotspot(hotspot_id: int, request: RejectHotspotRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/{hotspot_id}/reject-second-stage", response_model=RejectSecondStageResponse)
+@router.post(
+    "/{hotspot_id}/reject-second-stage", response_model=RejectSecondStageResponse
+)
 async def reject_second_stage(hotspot_id: int, request: RejectSecondStageRequest):
     """
     第二阶段拒绝热点并记录拒绝原因
@@ -811,4 +781,3 @@ async def reject_second_stage(hotspot_id: int, request: RejectSecondStageRequest
             f"rejection_reason: {request.rejection_reason}, error: {str(e)}, traceback: {traceback.format_exc()}"
         )
         raise HTTPException(status_code=500, detail=str(e))
-

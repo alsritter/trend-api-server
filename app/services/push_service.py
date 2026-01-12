@@ -1,14 +1,10 @@
 from typing import List, Dict, Any
-from datetime import datetime, timedelta
-import json
 import logging
-from app.db import session
+from app.db.session import pg_pool
 from app.schemas.push import (
     PushQueueItem,
-    Priority,
     PushStatus,
 )
-from app.schemas.hotspot import BusinessReportContent
 
 logger = logging.getLogger(__name__)
 
@@ -20,274 +16,155 @@ class PushService:
         """初始化推送服务"""
         pass
 
-    async def add_to_push_queue(
-        self, hotspot_id: int, report_id: int, channels: List[str]
-    ) -> Dict[str, Any]:
+    async def add_to_push_queue(self, hotspot_id: int) -> Dict[str, Any]:
         """
         添加到推送队列
 
-        Args:
+        参数:
             hotspot_id: 热点ID
-            report_id: 报告ID
-            channels: 推送渠道
 
-        Returns:
+        返回:
             包含 success, push_id, message 的字典
 
-        Raises:
-            ValueError: 如果报告不存在
+        异常:
+            ValueError: 如果热点不存在
         """
-        async with session.pg_pool.acquire() as conn:
-            # 获取报告的优先级和分数
-            report = await conn.fetchrow(
-                "SELECT priority, score FROM business_reports WHERE id = $1", report_id
+        async with pg_pool.acquire() as conn:
+            # 检查热点是否存在
+            hotspot = await conn.fetchrow(
+                """
+                SELECT id FROM hotspots WHERE id = $1
+                """,
+                hotspot_id,
             )
 
-            if not report:
-                raise ValueError(f"报告 {report_id} 不存在")
+            if not hotspot:
+                raise ValueError(f"Hotspot not found: hotspot_id={hotspot_id}")
+
+            # 检查是否已经在队列中
+            existing = await conn.fetchrow(
+                """
+                SELECT id FROM push_queue WHERE hotspot_id = $1
+                """,
+                hotspot_id,
+            )
+
+            if existing:
+                return {
+                    "success": True,
+                    "push_id": existing["id"],
+                    "message": "Already in push queue",
+                }
 
             # 插入推送队列
             push_id = await conn.fetchval(
                 """
-                INSERT INTO push_queue (
-                    hotspot_id, report_id, priority, score, channels, scheduled_at
-                )
-                VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+                INSERT INTO push_queue (hotspot_id, status)
+                VALUES ($1, $2)
                 RETURNING id
                 """,
                 hotspot_id,
-                report_id,
-                report["priority"],
-                report["score"],
-                json.dumps(channels),
+                PushStatus.PENDING.value,
             )
 
             logger.info(
-                f"添加到推送队列成功 - push_id: {push_id}, hotspot_id: {hotspot_id}, "
-                f"report_id: {report_id}, channels: {channels}"
+                f"Added to push queue - push_id: {push_id}, hotspot_id: {hotspot_id}"
             )
 
             return {
                 "success": True,
                 "push_id": push_id,
-                "message": f"已添加到推送队列 (ID: {push_id})",
+                "message": "Successfully added to push queue",
             }
 
     async def get_pending_push_items(self, limit: int = 10) -> List[PushQueueItem]:
         """
-        获取待推送的报告（按优先级和分数排序）
+        获取待推送的报告
 
-        Args:
+        参数:
             limit: 返回数量限制
 
-        Returns:
-            推送队列项列表
+        返回:
+            待推送项列表
         """
-        async with session.pg_pool.acquire() as conn:
-            # 获取上次推送时间，确保间隔 >= 2小时
-            last_push = await conn.fetchval(
+        async with pg_pool.acquire() as conn:
+            # 获取待推送项
+            rows = await conn.fetch(
                 """
-                SELECT MAX(sent_at)
+                SELECT id, hotspot_id, status, created_at, updated_at
                 FROM push_queue
-                WHERE status = 'sent'
-                """
-            )
-
-            two_hours_ago = datetime.now() - timedelta(hours=2)
-            can_push = last_push is None or last_push < two_hours_ago
-
-            if not can_push:
-                logger.info(
-                    f"推送间隔未达标 - last_push: {last_push}, "
-                    f"需要等待到 {last_push + timedelta(hours=2) if last_push else 'N/A'}"
-                )
-                return []
-
-            # 查询待推送项
-            records = await conn.fetch(
-                """
-                SELECT
-                    pq.*,
-                    h.keyword,
-                    br.report
-                FROM push_queue pq
-                JOIN hotspots h ON pq.hotspot_id = h.id
-                JOIN business_reports br ON pq.report_id = br.id
-                WHERE pq.status = 'pending'
-                ORDER BY
-                    CASE pq.priority
-                        WHEN 'high' THEN 1
-                        WHEN 'medium' THEN 2
-                        WHEN 'low' THEN 3
-                    END,
-                    pq.score DESC
-                LIMIT $1
+                WHERE status = $1
+                ORDER BY created_at DESC
+                LIMIT $2
                 """,
+                PushStatus.PENDING.value,
                 limit,
             )
 
             items = [
                 PushQueueItem(
-                    id=r["id"],
-                    hotspot_id=r["hotspot_id"],
-                    report_id=r["report_id"],
-                    priority=Priority(r["priority"]),
-                    score=float(r["score"]),
-                    status=PushStatus(r["status"]),
-                    channels=json.loads(r["channels"])
-                    if isinstance(r["channels"], str)
-                    else r["channels"],
-                    scheduled_at=r["scheduled_at"],
-                    sent_at=r["sent_at"],
-                    retry_count=r["retry_count"],
-                    error_message=r["error_message"],
-                    created_at=r["created_at"],
-                    updated_at=r["updated_at"],
-                    keyword=r["keyword"],
-                    report=BusinessReportContent(**json.loads(r["report"]))
-                    if r["report"]
-                    else None,
+                    id=row["id"],
+                    hotspot_id=row["hotspot_id"],
+                    status=PushStatus(row["status"]),
+                    created_at=row["created_at"],
+                    updated_at=row["updated_at"],
                 )
-                for r in records
+                for row in rows
             ]
 
-            logger.info(f"获取待推送项 - 数量: {len(items)}, limit: {limit}")
+            logger.info(f"Found {len(items)} pending push items")
             return items
 
-    async def update_push_status(
-        self,
-        push_id: int,
-        status: PushStatus,
-        error_message: str = None,
-    ) -> Dict[str, Any]:
+    async def update_push_status(self, push_id: int, status: PushStatus) -> Dict[str, Any]:
         """
         更新推送状态
 
-        Args:
+        参数:
             push_id: 推送队列项ID
             status: 新的推送状态
-            error_message: 错误信息（如果失败）
 
-        Returns:
+        返回:
             包含 success, message, old_status, new_status 的字典
 
-        Raises:
+        异常:
             ValueError: 如果推送项不存在
         """
-        async with session.pg_pool.acquire() as conn:
+        async with pg_pool.acquire() as conn:
             # 获取当前状态
             current = await conn.fetchrow(
-                "SELECT status FROM push_queue WHERE id = $1", push_id
-            )
-
-            if not current:
-                raise ValueError(f"推送队列项 {push_id} 不存在")
-
-            old_status = PushStatus(current["status"])
-
-            # 更新状态
-            if status == PushStatus.SENT:
-                await conn.execute(
-                    """
-                    UPDATE push_queue
-                    SET status = $1,
-                        sent_at = CURRENT_TIMESTAMP,
-                        updated_at = CURRENT_TIMESTAMP,
-                        error_message = NULL
-                    WHERE id = $2
-                    """,
-                    status.value,
-                    push_id,
-                )
-            elif status == PushStatus.FAILED:
-                await conn.execute(
-                    """
-                    UPDATE push_queue
-                    SET status = $1,
-                        retry_count = retry_count + 1,
-                        updated_at = CURRENT_TIMESTAMP,
-                        error_message = $2
-                    WHERE id = $3
-                    """,
-                    status.value,
-                    error_message,
-                    push_id,
-                )
-            else:
-                await conn.execute(
-                    """
-                    UPDATE push_queue
-                    SET status = $1,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = $2
-                    """,
-                    status.value,
-                    push_id,
-                )
-
-            logger.info(
-                f"更新推送状态 - push_id: {push_id}, {old_status.value} -> {status.value}"
-            )
-
-            return {
-                "success": True,
-                "message": f"推送状态已更新为 {status.value}",
-                "old_status": old_status,
-                "new_status": status,
-            }
-
-    async def get_push_item(self, push_id: int) -> PushQueueItem:
-        """
-        获取推送队列项详情
-
-        Args:
-            push_id: 推送队列项ID
-
-        Returns:
-            推送队列项
-
-        Raises:
-            ValueError: 如果推送项不存在
-        """
-        async with session.pg_pool.acquire() as conn:
-            record = await conn.fetchrow(
                 """
-                SELECT
-                    pq.*,
-                    h.keyword,
-                    br.report
-                FROM push_queue pq
-                JOIN hotspots h ON pq.hotspot_id = h.id
-                JOIN business_reports br ON pq.report_id = br.id
-                WHERE pq.id = $1
+                SELECT status FROM push_queue WHERE id = $1
                 """,
                 push_id,
             )
 
-            if not record:
-                raise ValueError(f"推送队列项 {push_id} 不存在")
+            if not current:
+                raise ValueError(f"Push item not found: push_id={push_id}")
 
-            return PushQueueItem(
-                id=record["id"],
-                hotspot_id=record["hotspot_id"],
-                report_id=record["report_id"],
-                priority=Priority(record["priority"]),
-                score=float(record["score"]),
-                status=PushStatus(record["status"]),
-                channels=json.loads(record["channels"])
-                if isinstance(record["channels"], str)
-                else record["channels"],
-                scheduled_at=record["scheduled_at"],
-                sent_at=record["sent_at"],
-                retry_count=record["retry_count"],
-                error_message=record["error_message"],
-                created_at=record["created_at"],
-                updated_at=record["updated_at"],
-                keyword=record["keyword"],
-                report=BusinessReportContent(**json.loads(record["report"]))
-                if record["report"]
-                else None,
+            old_status = PushStatus(current["status"])
+
+            # 更新状态
+            await conn.execute(
+                """
+                UPDATE push_queue 
+                SET status = $1
+                WHERE id = $2
+                """,
+                status.value,
+                push_id,
             )
+
+            logger.info(
+                f"Updated push status - push_id: {push_id}, "
+                f"old: {old_status.value}, new: {status.value}"
+            )
+
+            return {
+                "success": True,
+                "message": f"Status updated from {old_status.value} to {status.value}",
+                "old_status": old_status,
+                "new_status": status,
+            }
 
 
 # 全局单例

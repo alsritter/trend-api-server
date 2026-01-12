@@ -1,18 +1,32 @@
-from typing import List, Optional
+from typing import List
 from pydantic import BaseModel, Field
 from datetime import datetime
-from app.schemas.hotspot import PushStatus
+from enum import Enum
+
+
+# ==================== 枚举定义 ====================
+class Priority(str, Enum):
+    """优先级枚举"""
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class PushStatus(str, Enum):
+    """推送状态枚举"""
+
+    PENDING = "pending"
+    SENT = "sent"
+    FAILED = "failed"
 
 
 # ==================== 推送队列相关 ====================
+
 class AddToPushQueueRequest(BaseModel):
     """添加到推送队列请求"""
 
     hotspot_id: int = Field(..., description="热点ID")
-    report_id: int = Field(..., description="报告ID")
-    channels: List[str] = Field(
-        default_factory=lambda: ["email"], description="推送渠道"
-    )
 
 
 class AddToPushQueueResponse(BaseModel):
@@ -45,7 +59,6 @@ class UpdatePushStatusRequest(BaseModel):
     """更新推送状态请求"""
 
     status: PushStatus = Field(..., description="新的推送状态")
-    error_message: Optional[str] = Field(None, description="错误信息（如果失败）")
 
 
 class UpdatePushStatusResponse(BaseModel):

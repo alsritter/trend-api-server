@@ -2,8 +2,6 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
 from enum import Enum
-
-
 class HotspotStatus(str, Enum):
     """热点状态枚举"""
 
@@ -18,21 +16,6 @@ class HotspotStatus(str, Enum):
     ARCHIVED = "archived"
     OUTDATED = "outdated"
 
-
-class Priority(str, Enum):
-    """优先级枚举"""
-
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
-
-
-class PushStatus(str, Enum):
-    """推送状态枚举"""
-
-    PENDING = "pending"
-    SENT = "sent"
-    FAILED = "failed"
 
 
 # ==================== 热词价值判断相关 ====================
@@ -141,63 +124,6 @@ class CheckHotspotResponse(BaseModel):
         default_factory=list, description="相似的热词列表"
     )
     message: str
-
-
-# ==================== 商业报告相关 ====================
-class VirtualProductAnalysis(BaseModel):
-    """虚拟产品分析"""
-
-    opportunities: List[str] = Field(default_factory=list)
-    feasibility_score: int = Field(..., ge=0, le=100)
-
-
-class PhysicalProductAnalysis(BaseModel):
-    """实体产品分析"""
-
-    opportunities: List[str] = Field(default_factory=list)
-    feasibility_score: int = Field(..., ge=0, le=100)
-
-
-class BusinessReportContent(BaseModel):
-    """商业报告内容"""
-
-    summary: str = Field(..., description="简短总结")
-    virtual_products: VirtualProductAnalysis = Field(..., description="虚拟产品机会")
-    physical_products: PhysicalProductAnalysis = Field(..., description="实体产品机会")
-    target_audience: List[str] = Field(default_factory=list, description="目标受众")
-    market_size: str = Field(..., description="市场规模估算")
-    recommendations: List[str] = Field(default_factory=list, description="建议")
-
-
-class AddBusinessReportRequest(BaseModel):
-    """添加商业报告请求"""
-
-    hotspot_id: int = Field(..., description="热点ID")
-    report: BusinessReportContent = Field(..., description="报告内容")
-    score: float = Field(..., ge=0, le=100, description="可行性分数")
-    priority: Priority = Field(default=Priority.MEDIUM, description="优先级")
-    product_types: List[str] = Field(default_factory=list, description="商品类型")
-
-
-class AddBusinessReportResponse(BaseModel):
-    """添加商业报告响应"""
-
-    success: bool
-    report_id: int
-    message: str
-
-
-class BusinessReportInfo(BaseModel):
-    """商业报告信息"""
-
-    id: int
-    hotspot_id: int
-    report: BusinessReportContent
-    score: float
-    priority: Priority
-    product_types: Optional[List[str]]
-    analyzed_at: datetime
-    created_at: datetime
 
 
 # ==================== 热点管理相关 ====================

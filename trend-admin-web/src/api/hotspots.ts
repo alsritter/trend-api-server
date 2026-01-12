@@ -4,11 +4,6 @@ import type {
   AddHotspotKeywordResponse,
   CheckHotspotRequest,
   CheckHotspotResponse,
-  AddBusinessReportRequest,
-  AddBusinessReportResponse,
-  AddToPushQueueRequest,
-  AddToPushQueueResponse,
-  GetPendingPushResponse,
   ListHotspotsRequest,
   ListHotspotsResponse,
   DeleteHotspotResponse,
@@ -39,29 +34,6 @@ export const hotspotsApi = {
    */
   checkExists: async (data: CheckHotspotRequest): Promise<CheckHotspotResponse> => {
     return apiClient.post(`${BASE_PATH}/check-exists`, data);
-  },
-
-  /**
-   * 添加商业报告
-   */
-  addBusinessReport: async (
-    data: AddBusinessReportRequest
-  ): Promise<AddBusinessReportResponse> => {
-    return apiClient.post(`${BASE_PATH}/business-report`, data);
-  },
-
-  /**
-   * 添加到推送队列
-   */
-  addToPushQueue: async (data: AddToPushQueueRequest): Promise<AddToPushQueueResponse> => {
-    return apiClient.post(`${BASE_PATH}/push-queue`, data);
-  },
-
-  /**
-   * 获取待推送的报告
-   */
-  getPendingPush: async (limit: number = 10): Promise<GetPendingPushResponse> => {
-    return apiClient.get(`${BASE_PATH}/push-queue/pending`, { params: { limit } });
   },
 
   // ==================== 前端管理接口 ====================
