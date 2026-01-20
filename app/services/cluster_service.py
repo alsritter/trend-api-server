@@ -116,7 +116,7 @@ class ClusterService:
                 SELECT
                     c.id,
                     c.cluster_name,
-                    c.member_count,
+                    COUNT(DISTINCT h.id) as member_count,
                     c.keywords,
                     c.selected_hotspot_id,
                     c.created_at,
@@ -147,7 +147,7 @@ class ClusterService:
                 FROM hotspot_clusters c
                 LEFT JOIN hotspots h ON h.cluster_id = c.id
                 {where_clause}
-                GROUP BY c.id, c.cluster_name, c.member_count, c.keywords, c.selected_hotspot_id, c.created_at, c.updated_at
+                GROUP BY c.id, c.cluster_name, c.keywords, c.selected_hotspot_id, c.created_at, c.updated_at
                 ORDER BY COALESCE(MAX(h.updated_at), c.updated_at) DESC
                 LIMIT ${param_counter} OFFSET ${param_counter + 1}
             """
@@ -208,7 +208,7 @@ class ClusterService:
                 SELECT
                     c.id,
                     c.cluster_name,
-                    c.member_count,
+                    COUNT(DISTINCT h.id) as member_count,
                     c.keywords,
                     c.selected_hotspot_id,
                     c.created_at,
@@ -239,7 +239,7 @@ class ClusterService:
                 FROM hotspot_clusters c
                 LEFT JOIN hotspots h ON h.cluster_id = c.id
                 WHERE c.id = $1
-                GROUP BY c.id, c.cluster_name, c.member_count, c.keywords, c.selected_hotspot_id, c.created_at, c.updated_at
+                GROUP BY c.id, c.cluster_name, c.keywords, c.selected_hotspot_id, c.created_at, c.updated_at
                 """,
                 cluster_id,
             )
@@ -295,7 +295,6 @@ class ClusterService:
             async with conn.transaction():
                 # 如果提供了热点ID，验证它们存在
                 keywords = []
-                member_count = 0
 
                 if hotspot_ids:
                     # 获取热点信息
@@ -311,17 +310,15 @@ class ClusterService:
                         raise ValueError("部分热点ID不存在")
 
                     keywords = [h["keyword"] for h in hotspots]
-                    member_count = len(hotspots)
 
                 # 创建聚簇
                 cluster_id = await conn.fetchval(
                     """
-                    INSERT INTO hotspot_clusters (cluster_name, member_count, keywords)
-                    VALUES ($1, $2, $3)
+                    INSERT INTO hotspot_clusters (cluster_name, keywords)
+                    VALUES ($1, $2)
                     RETURNING id
                     """,
                     cluster_name,
-                    member_count,
                     json.dumps(keywords, ensure_ascii=False),
                 )
 
@@ -361,7 +358,7 @@ class ClusterService:
                 # 获取所有源簇信息
                 clusters = await conn.fetch(
                     """
-                    SELECT id, cluster_name, member_count, keywords
+                    SELECT id, cluster_name, keywords
                     FROM hotspot_clusters
                     WHERE id = ANY($1)
                     """,
@@ -371,9 +368,8 @@ class ClusterService:
                 if len(clusters) < 2:
                     raise ValueError("至少需要2个聚簇才能合并")
 
-                # 收集所有关键词和计算总成员数
+                # 收集所有关键词
                 all_keywords = []
-                total_members = 0
                 for cluster in clusters:
                     keywords = (
                         json.loads(cluster["keywords"])
@@ -381,7 +377,6 @@ class ClusterService:
                         else cluster["keywords"]
                     )
                     all_keywords.extend(keywords)
-                    total_members += cluster["member_count"]
 
                 # 去重关键词
                 unique_keywords = list(dict.fromkeys(all_keywords))
@@ -395,13 +390,11 @@ class ClusterService:
                     """
                     UPDATE hotspot_clusters
                     SET cluster_name = $1,
-                        member_count = $2,
-                        keywords = $3,
+                        keywords = $2,
                         updated_at = CURRENT_TIMESTAMP
-                    WHERE id = $4
+                    WHERE id = $3
                     """,
                     final_cluster_name,
-                    total_members,
                     json.dumps(unique_keywords),
                     target_cluster_id,
                 )
@@ -455,7 +448,7 @@ class ClusterService:
             async with conn.transaction():
                 # 检查簇是否存在
                 cluster = await conn.fetchrow(
-                    "SELECT id, cluster_name, member_count, keywords FROM hotspot_clusters WHERE id = $1",
+                    "SELECT id, cluster_name, keywords FROM hotspot_clusters WHERE id = $1",
                     cluster_id,
                 )
 
@@ -488,12 +481,11 @@ class ClusterService:
                     # 创建新簇
                     new_cluster_id = await conn.fetchval(
                         """
-                        INSERT INTO hotspot_clusters (cluster_name, member_count, keywords)
-                        VALUES ($1, $2, $3)
+                        INSERT INTO hotspot_clusters (cluster_name, keywords)
+                        VALUES ($1, $2)
                         RETURNING id
                         """,
                         final_new_cluster_name,
-                        len(hotspots),
                         json.dumps(removed_keywords),
                     )
 
@@ -520,7 +512,7 @@ class ClusterService:
                         hotspot_ids[0],
                     )
 
-                # 更新原簇的成员数量和关键词列表
+                # 更新原簇的关键词列表
                 old_keywords = (
                     json.loads(cluster["keywords"])
                     if isinstance(cluster["keywords"], str)
@@ -529,19 +521,22 @@ class ClusterService:
                 remaining_keywords = [
                     kw for kw in old_keywords if kw not in removed_keywords
                 ]
-                remaining_count = cluster["member_count"] - len(hotspots)
+
+                # 检查原簇是否还有成员
+                remaining_count = await conn.fetchval(
+                    "SELECT COUNT(*) FROM hotspots WHERE cluster_id = $1",
+                    cluster_id,
+                )
 
                 if remaining_count > 0:
                     # 更新原簇
                     await conn.execute(
                         """
                         UPDATE hotspot_clusters
-                        SET member_count = $1,
-                            keywords = $2,
+                        SET keywords = $1,
                             updated_at = CURRENT_TIMESTAMP
-                        WHERE id = $3
+                        WHERE id = $2
                         """,
-                        remaining_count,
                         json.dumps(remaining_keywords),
                         cluster_id,
                     )
@@ -666,12 +661,12 @@ class ClusterService:
 
                 # 获取簇信息
                 cluster = await conn.fetchrow(
-                    "SELECT id, member_count, keywords FROM hotspot_clusters WHERE id = $1",
+                    "SELECT id, keywords FROM hotspot_clusters WHERE id = $1",
                     cluster_id,
                 )
 
                 if cluster:
-                    # 更新簇的成员数量和关键词列表
+                    # 更新簇的关键词列表
                     old_keywords = (
                         json.loads(cluster["keywords"])
                         if isinstance(cluster["keywords"], str)
@@ -680,18 +675,21 @@ class ClusterService:
                     new_keywords = [
                         kw for kw in old_keywords if kw != hotspot["keyword"]
                     ]
-                    new_member_count = cluster["member_count"] - 1
 
-                    if new_member_count > 0:
+                    # 检查簇是否还有其他成员
+                    remaining_count = await conn.fetchval(
+                        "SELECT COUNT(*) FROM hotspots WHERE cluster_id = $1",
+                        cluster_id,
+                    )
+
+                    if remaining_count > 0:
                         await conn.execute(
                             """
                             UPDATE hotspot_clusters
-                            SET member_count = $1,
-                                keywords = $2,
+                            SET keywords = $1,
                                 updated_at = CURRENT_TIMESTAMP
-                            WHERE id = $3
+                            WHERE id = $2
                             """,
-                            new_member_count,
                             json.dumps(new_keywords),
                             cluster_id,
                         )

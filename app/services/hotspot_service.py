@@ -155,8 +155,7 @@ class HotspotService:
                         await conn.execute(
                             """
                             UPDATE hotspot_clusters
-                            SET member_count = member_count + 1,
-                                keywords = keywords || $1::jsonb,
+                            SET keywords = keywords || $1::jsonb,
                                 updated_at = CURRENT_TIMESTAMP
                             WHERE id = $2
                             """,
@@ -167,8 +166,8 @@ class HotspotService:
                         # 创建新的cluster，并将两个热词都加入
                         cluster_id = await conn.fetchval(
                             """
-                            INSERT INTO hotspot_clusters (cluster_name, member_count, keywords)
-                            VALUES ($1, 2, $2)
+                            INSERT INTO hotspot_clusters (cluster_name, keywords)
+                            VALUES ($1, $2)
                             RETURNING id
                             """,
                             similar_record["keyword"],  # 使用第一个热词作为cluster名称
@@ -193,8 +192,8 @@ class HotspotService:
             if create_new_cluster:
                 cluster_id = await conn.fetchval(
                     """
-                    INSERT INTO hotspot_clusters (cluster_name, member_count, keywords)
-                    VALUES ($1, 1, $2)
+                    INSERT INTO hotspot_clusters (cluster_name, keywords)
+                    VALUES ($1, $2)
                     RETURNING id
                     """,
                     analysis.title,  # 使用热词本身作为cluster名称
@@ -849,8 +848,7 @@ class HotspotService:
                     await conn.execute(
                         """
                         UPDATE hotspot_clusters
-                        SET member_count = member_count + 1,
-                            keywords = keywords || $1::jsonb,
+                        SET keywords = keywords || $1::jsonb,
                             updated_at = CURRENT_TIMESTAMP
                         WHERE id = $2
                         """,
@@ -861,8 +859,8 @@ class HotspotService:
                     # 创建新 cluster，包含源热点和新热点
                     cluster_id = await conn.fetchval(
                         """
-                        INSERT INTO hotspot_clusters (cluster_name, member_count, keywords)
-                        VALUES ($1, 2, $2)
+                        INSERT INTO hotspot_clusters (cluster_name, keywords)
+                        VALUES ($1, $2)
                         RETURNING id
                         """,
                         source_hotspot["keyword"],  # 使用源热点作为 cluster 名称

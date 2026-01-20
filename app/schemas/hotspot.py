@@ -227,11 +227,11 @@ class ClusterInfo(BaseModel):
 
     id: int
     cluster_name: str
-    member_count: int
     keywords: List[str]
     selected_hotspot_id: Optional[int] = Field(
         None, description="被选中用于验证的热词ID"
     )
+    member_count: int = Field(..., description="成员数量（动态计算）")
     created_at: datetime
     updated_at: datetime
     statuses: List[str] = Field(

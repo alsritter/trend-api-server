@@ -88,8 +88,8 @@ COMMENT ON COLUMN hotspots.platforms IS '平台信息数组，包含平台名、
 CREATE TABLE hotspot_clusters (
     id BIGSERIAL PRIMARY KEY,
     cluster_name VARCHAR(255) NOT NULL,              -- 簇代表名称
-    member_count INT DEFAULT 1,                      -- 成员数量
     keywords JSONB,                                  -- 簇内所有关键词 ["iPhone 17", "苹果新机", ...]
+    selected_hotspot_id BIGINT,                      -- 被选中用于验证的热词ID
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
