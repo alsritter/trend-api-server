@@ -1,5 +1,10 @@
 import { Table, Space, Button, Tag, Tooltip, Modal } from "antd";
-import { EditOutlined, DeleteOutlined, CheckCircleOutlined } from "@ant-design/icons";
+import {
+  EditOutlined,
+  DeleteOutlined,
+  CheckCircleOutlined,
+  CloudDownloadOutlined
+} from "@ant-design/icons";
 import type { ClusterInfo } from "@/types/api";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
@@ -18,7 +23,11 @@ interface ClustersTableProps {
   onEdit: (cluster: ClusterInfo) => void;
   onDelete: (clusterId: number, clusterName: string) => void;
   onValidateSuccess?: (cluster: ClusterInfo) => void;
-  onSelectChange?: (selectedRowKeys: React.Key[], selectedRows: ClusterInfo[]) => void;
+  onTriggerCrawl?: (cluster: ClusterInfo) => void;
+  onSelectChange?: (
+    selectedRowKeys: React.Key[],
+    selectedRows: ClusterInfo[]
+  ) => void;
   onPageChange: (page: number, pageSize: number) => void;
   renderExpandedRow: (record: ClusterInfo) => React.ReactNode;
 }
@@ -36,6 +45,7 @@ export function ClustersTable({
   onEdit,
   onDelete,
   onValidateSuccess,
+  onTriggerCrawl,
   onSelectChange,
   onPageChange,
   renderExpandedRow
@@ -125,7 +135,7 @@ export function ClustersTable({
               <Button
                 type="text"
                 size="small"
-                style={{ color: '#52c41a' }}
+                style={{ color: "#52c41a" }}
                 icon={<CheckCircleOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -133,6 +143,24 @@ export function ClustersTable({
                     title: "确认验证成功",
                     content: `确定要将聚簇"${record.cluster_name}"的代表热点标记为已验证吗？`,
                     onOk: () => onValidateSuccess(record)
+                  });
+                }}
+              />
+            </Tooltip>
+          )}
+          {record.selected_hotspot_id && onTriggerCrawl && (
+            <Tooltip title="触发爬取">
+              <Button
+                type="text"
+                size="small"
+                style={{ color: "#1890ff" }}
+                icon={<CloudDownloadOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  Modal.confirm({
+                    title: "确认触发爬取",
+                    content: `确定要为聚簇"${record.cluster_name}"的代表热点触发爬虫任务吗？`,
+                    onOk: () => onTriggerCrawl(record)
                   });
                 }}
               />
@@ -204,15 +232,15 @@ export function ClustersTable({
           // 阻止点击操作按钮时触发行点击
           const target = e.target as HTMLElement;
           if (
-            target.closest('.ant-btn') || 
-            target.closest('.ant-checkbox-wrapper')
+            target.closest(".ant-btn") ||
+            target.closest(".ant-checkbox-wrapper")
           ) {
             return;
           }
           const isExpanded = expandedRowKeys.includes(record.id);
           onExpandChange(!isExpanded, record);
         },
-        style: { cursor: 'pointer' }
+        style: { cursor: "pointer" }
       })}
       scroll={{ x: 1500 }}
     />

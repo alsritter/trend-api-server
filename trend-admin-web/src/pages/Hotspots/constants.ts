@@ -12,7 +12,7 @@ export const STATUS_MAP: Record<string, { label: string; color: string }> = {
   outdated: { label: "已过时", color: "magenta" }
 };
 
-// 平台映射
+// 平台映射（显示用）
 export const PLATFORM_MAP: Record<string, string> = {
   小红书: "小红书",
   抖音: "抖音",
@@ -21,4 +21,23 @@ export const PLATFORM_MAP: Record<string, string> = {
   快手: "快手",
   贴吧: "贴吧",
   知乎: "知乎"
+};
+
+// 平台名称到代码的映射（API调用用）
+export const PLATFORM_NAME_TO_CODE: Record<string, string> = {
+  "小红书": "xhs",
+  "抖音": "dy",
+  "哔哩哔哩": "bili",
+  "微博": "wb",
+  "快手": "ks",
+  "贴吧": "tieba",
+  "知乎": "zhihu",
+  // 兼容已经是代码的情况
+  "xhs": "xhs",
+  "dy": "dy",
+  "bili": "bili",
+  "wb": "wb",
+  "ks": "ks",
+  "tieba": "tieba",
+  "zhihu": "zhihu"
 };

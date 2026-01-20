@@ -653,3 +653,23 @@ export interface UpdateHotspotStatusAndSetRepresentativeResponse {
   cluster_id?: number;
   is_cluster_representative: boolean;
 }
+
+// 触发爬虫请求
+export interface TriggerCrawlRequest {
+  hotspot_id: number;
+  platforms: string[];
+  crawler_type?: string;
+  max_notes_count?: number;
+  enable_comments?: boolean;
+  enable_sub_comments?: boolean;
+  max_comments_count?: number;
+}
+
+// 触发爬虫响应
+export interface TriggerCrawlResponse {
+  success: boolean;
+  message: string;
+  hotspot_id: number;
+  task_ids: string[];
+  total_tasks: number;
+}

@@ -15,6 +15,8 @@ import type {
   UpdateHotspotStatusResponse,
   UpdateHotspotStatusAndSetRepresentativeRequest,
   UpdateHotspotStatusAndSetRepresentativeResponse,
+  TriggerCrawlRequest,
+  TriggerCrawlResponse,
 } from '@/types/api';
 
 const BASE_PATH = '/api/v1/hotspots';
@@ -91,5 +93,12 @@ export const hotspotsApi = {
     data: UpdateHotspotStatusAndSetRepresentativeRequest
   ): Promise<UpdateHotspotStatusAndSetRepresentativeResponse> => {
     return apiClient.patch(`${BASE_PATH}/${hotspotId}/status-and-representative`, data);
+  },
+
+  /**
+   * 触发爬虫任务
+   */
+  triggerCrawl: async (data: TriggerCrawlRequest): Promise<TriggerCrawlResponse> => {
+    return apiClient.post(`${BASE_PATH}/trigger-crawl`, data);
   },
 };

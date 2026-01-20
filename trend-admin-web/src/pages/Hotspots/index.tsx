@@ -10,6 +10,7 @@ import dayjs from "dayjs";
 import { HotspotsFilter } from "./HotspotsFilter";
 import { ClustersTable } from "./ClustersTable";
 import { ClusterExpandedRow } from "./ClusterExpandedRow";
+import { PLATFORM_NAME_TO_CODE } from "./constants";
 
 import { EditClusterModal } from "./EditClusterModal";
 import { MergeClustersModal } from "./MergeClustersModal";
@@ -129,6 +130,40 @@ function Hotspots() {
     }
   });
 
+  // 触发爬取 - 为聚簇代表热点触发爬虫任务
+  const triggerCrawlMutation = useMutation({
+    mutationFn: async (cluster: ClusterInfo) => {
+      if (!cluster.selected_hotspot_id) {
+        throw new Error("该聚簇没有绑定代表热点");
+      }
+      // 根据聚簇的平台分布自动选择要爬取的平台，并转换为平台代码
+      const platforms = cluster.platforms
+        .map(p => PLATFORM_NAME_TO_CODE[p.platform] || p.platform)
+        .filter(Boolean); // 过滤掉无效的平台代码
+      
+      if (platforms.length === 0) {
+        throw new Error("没有找到有效的平台");
+      }
+      
+      return hotspotsApi.triggerCrawl({
+        hotspot_id: cluster.selected_hotspot_id,
+        platforms: platforms,
+        crawler_type: "search",
+        max_notes_count: 50,
+        enable_comments: true,
+        enable_sub_comments: false,
+        max_comments_count: 20
+      });
+    },
+    onSuccess: (data) => {
+      message.success(`成功创建 ${data.total_tasks} 个爬虫任务`);
+      refetchClusters();
+    },
+    onError: (error: any) => {
+      message.error(`触发爬取失败: ${error.message}`);
+    }
+  });
+
   // 合并聚簇
   const mergeClustersMutation = useMutation({
     mutationFn: (data: {
@@ -165,9 +200,10 @@ function Hotspots() {
 
     setFilterStatus(["pending_validation"]);
     setExcludeStatus([]);
+    setFilterPlatforms(["小红书", "抖音"]);
     setFilterDateRange([twoDaysAgo, endOfToday]);
     setPage(1);
-    message.info("已应用待审核热词过滤条件（2天前至今天结束）");
+    message.info("已应用待审核热词过滤条件（2天前至今天结束，小红书和抖音平台）");
   };
 
   // 处理展开/收起聚簇
@@ -193,6 +229,11 @@ function Hotspots() {
   // 处理验证成功
   const handleValidateSuccess = (cluster: ClusterInfo) => {
     validateSuccessMutation.mutate(cluster);
+  };
+
+  // 处理触发爬取
+  const handleTriggerCrawl = (cluster: ClusterInfo) => {
+    triggerCrawlMutation.mutate(cluster);
   };
 
   // 处理编辑确认
@@ -299,6 +340,7 @@ function Hotspots() {
           onEdit={handleEdit}
           onDelete={handleDelete}
           onValidateSuccess={handleValidateSuccess}
+          onTriggerCrawl={handleTriggerCrawl}
           onSelectChange={handleSelectChange}
           onPageChange={handlePageChange}
           renderExpandedRow={(record) => (
