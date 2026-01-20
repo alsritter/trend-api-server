@@ -1,5 +1,5 @@
 import { Table, Space, Button, Tag, Tooltip, Modal } from "antd";
-import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import { EditOutlined, DeleteOutlined, CheckCircleOutlined } from "@ant-design/icons";
 import type { ClusterInfo } from "@/types/api";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
@@ -9,13 +9,17 @@ interface ClustersTableProps {
   data: ClusterInfo[];
   loading: boolean;
   total: number;
+  page: number;
+  pageSize: number;
   expandedRowKeys: number[];
   searchKeyword: string;
   selectedRowKeys?: number[];
   onExpandChange: (expanded: boolean, record: ClusterInfo) => void;
   onEdit: (cluster: ClusterInfo) => void;
   onDelete: (clusterId: number, clusterName: string) => void;
+  onValidateSuccess?: (cluster: ClusterInfo) => void;
   onSelectChange?: (selectedRowKeys: React.Key[], selectedRows: ClusterInfo[]) => void;
+  onPageChange: (page: number, pageSize: number) => void;
   renderExpandedRow: (record: ClusterInfo) => React.ReactNode;
 }
 
@@ -23,13 +27,17 @@ export function ClustersTable({
   data,
   loading,
   total,
+  page,
+  pageSize,
   expandedRowKeys,
   searchKeyword,
   selectedRowKeys,
   onExpandChange,
   onEdit,
   onDelete,
+  onValidateSuccess,
   onSelectChange,
+  onPageChange,
   renderExpandedRow
 }: ClustersTableProps) {
   const columns: ColumnsType<ClusterInfo> = [
@@ -108,10 +116,28 @@ export function ClustersTable({
     {
       title: "操作",
       key: "action",
-      width: 150,
+      width: 200,
       fixed: "right",
       render: (_, record) => (
         <Space size="small">
+          {record.selected_hotspot_id && onValidateSuccess && (
+            <Tooltip title="验证成功">
+              <Button
+                type="text"
+                size="small"
+                style={{ color: '#52c41a' }}
+                icon={<CheckCircleOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  Modal.confirm({
+                    title: "确认验证成功",
+                    content: `确定要将聚簇"${record.cluster_name}"的代表热点标记为已验证吗？`,
+                    onOk: () => onValidateSuccess(record)
+                  });
+                }}
+              />
+            </Tooltip>
+          )}
           <Tooltip title="编辑">
             <Button
               type="text"
@@ -160,11 +186,13 @@ export function ClustersTable({
           : undefined
       }
       pagination={{
+        current: page,
+        pageSize: pageSize,
         total,
-        pageSize: 20,
         showSizeChanger: true,
         showQuickJumper: true,
-        showTotal: (total) => `共 ${total} 个聚簇`
+        showTotal: (total) => `共 ${total} 个聚簇`,
+        onChange: onPageChange
       }}
       expandable={{
         expandedRowKeys,

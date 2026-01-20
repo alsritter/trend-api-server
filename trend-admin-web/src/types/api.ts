@@ -543,6 +543,7 @@ export interface ClusterInfo {
   cluster_name: string;
   member_count: number;
   keywords: string[];
+  selected_hotspot_id?: number;
   created_at: string;
   updated_at: string;
   statuses: string[];

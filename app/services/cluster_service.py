@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any
 from app.db import session
-from app.schemas.hotspot import ClusterInfo, PlatformStat, HotspotStatus
+from app.schemas.hotspot import ClusterInfo, PlatformStat
 import json
 from datetime import datetime
 
@@ -14,17 +14,21 @@ class ClusterService:
 
     async def list_clusters(
         self,
+        page: int = 1,
+        page_size: int = 20,
         status: Optional[List[str]] = None,
         exclude_status: Optional[List[str]] = None,
         platforms: Optional[List[str]] = None,
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
         keyword: Optional[str] = None,
-    ) -> List[ClusterInfo]:
+    ) -> Dict[str, Any]:
         """
         列出所有聚簇
 
         Args:
+            page: 页码，从1开始
+            page_size: 每页数量
             status: 热点状态列表过滤
             exclude_status: 排除的热点状态列表
             platforms: 平台列表过滤
@@ -33,7 +37,7 @@ class ClusterService:
             keyword: 搜索关键词，用于搜索聚簇名称和关键词
 
         Returns:
-            聚簇列表
+            包含 items 和 total 的字典
         """
         async with session.pg_pool.acquire() as conn:
             # 构建查询条件
@@ -43,14 +47,18 @@ class ClusterService:
 
             if status:
                 # 状态过滤：支持多个状态
-                status_placeholders = ",".join([f"${param_counter + i}" for i in range(len(status))])
+                status_placeholders = ",".join(
+                    [f"${param_counter + i}" for i in range(len(status))]
+                )
                 conditions.append(f"h.status IN ({status_placeholders})")
                 params.extend(status)
                 param_counter += len(status)
 
             if exclude_status:
                 # 排除状态：使用 NOT IN
-                exclude_placeholders = ",".join([f"${param_counter + i}" for i in range(len(exclude_status))])
+                exclude_placeholders = ",".join(
+                    [f"${param_counter + i}" for i in range(len(exclude_status))]
+                )
                 conditions.append(f"h.status NOT IN ({exclude_placeholders})")
                 params.extend(exclude_status)
                 param_counter += len(exclude_status)
@@ -60,8 +68,10 @@ class ClusterService:
                 # platforms 是一个 JSONB 数组，每个元素包含 platform 字段
                 # 使用 EXISTS 子查询检查数组中是否有匹配的 platform
                 platform_conditions = " OR ".join(
-                    [f"EXISTS (SELECT 1 FROM jsonb_array_elements(h.platforms) AS p WHERE p->>'platform' = ${param_counter + i})" 
-                     for i in range(len(platforms))]
+                    [
+                        f"EXISTS (SELECT 1 FROM jsonb_array_elements(h.platforms) AS p WHERE p->>'platform' = ${param_counter + i})"
+                        for i in range(len(platforms))
+                    ]
                 )
                 conditions.append(f"({platform_conditions})")
                 params.extend(platforms)
@@ -69,21 +79,37 @@ class ClusterService:
 
             if start_time:
                 conditions.append(f"h.updated_at >= ${param_counter}")
-                params.append(datetime.fromisoformat(start_time.replace('Z', '+00:00')))
+                # 解析 ISO 格式时间字符串，去掉时区信息以匹配数据库的 TIMESTAMP 类型
+                params.append(datetime.fromisoformat(start_time.replace("Z", "")))
                 param_counter += 1
 
             if end_time:
                 conditions.append(f"h.updated_at <= ${param_counter}")
-                params.append(datetime.fromisoformat(end_time.replace('Z', '+00:00')))
+                # 解析 ISO 格式时间字符串，去掉时区信息以匹配数据库的 TIMESTAMP 类型
+                params.append(datetime.fromisoformat(end_time.replace("Z", "")))
                 param_counter += 1
 
             if keyword:
                 # 关键词搜索：搜索聚簇名称或关键词列表
-                conditions.append(f"(c.cluster_name ILIKE ${param_counter} OR c.keywords::text ILIKE ${param_counter})")
+                conditions.append(
+                    f"(c.cluster_name ILIKE ${param_counter} OR c.keywords::text ILIKE ${param_counter})"
+                )
                 params.append(f"%{keyword}%")
                 param_counter += 1
 
             where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+            # 先查询总数
+            count_query = f"""
+                SELECT COUNT(DISTINCT c.id)
+                FROM hotspot_clusters c
+                LEFT JOIN hotspots h ON h.cluster_id = c.id
+                {where_clause}
+            """
+            total_count = await conn.fetchval(count_query, *params)
+
+            # 计算分页偏移量
+            offset = (page - 1) * page_size
 
             # 查询聚簇及其热点的平台统计
             query = f"""
@@ -123,7 +149,9 @@ class ClusterService:
                 {where_clause}
                 GROUP BY c.id, c.cluster_name, c.member_count, c.keywords, c.selected_hotspot_id, c.created_at, c.updated_at
                 ORDER BY COALESCE(MAX(h.updated_at), c.updated_at) DESC
+                LIMIT ${param_counter} OFFSET ${param_counter + 1}
             """
+            params.extend([page_size, offset])
 
             records = await conn.fetch(query, *params)
 
@@ -134,10 +162,14 @@ class ClusterService:
                 if isinstance(platforms_data, str):
                     platforms_data = json.loads(platforms_data)
 
-                platform_stats = [
-                    PlatformStat(platform=p["platform"], count=p["count"])
-                    for p in platforms_data
-                ] if platforms_data else []
+                platform_stats = (
+                    [
+                        PlatformStat(platform=p["platform"], count=p["count"])
+                        for p in platforms_data
+                    ]
+                    if platforms_data
+                    else []
+                )
 
                 result.append(
                     ClusterInfo(
@@ -150,13 +182,15 @@ class ClusterService:
                         selected_hotspot_id=r["selected_hotspot_id"],
                         created_at=r["created_at"],
                         updated_at=r["updated_at"],
-                        statuses=r["statuses"] if isinstance(r["statuses"], list) else json.loads(r["statuses"]),
+                        statuses=r["statuses"]
+                        if isinstance(r["statuses"], list)
+                        else json.loads(r["statuses"]),
                         last_hotspot_update=r["last_hotspot_update"],
                         platforms=platform_stats,
                     )
                 )
 
-            return result
+            return {"items": result, "total": total_count}
 
     async def get_cluster_by_id(self, cluster_id: int) -> Optional[ClusterInfo]:
         """
@@ -185,7 +219,23 @@ class ClusterService:
                         '[]'::json
                     ) as statuses,
                     -- 获取聚簇中最晚的更新时间
-                    COALESCE(MAX(h.updated_at), c.updated_at) as last_hotspot_update
+                    COALESCE(MAX(h.updated_at), c.updated_at) as last_hotspot_update,
+                    -- 聚合平台统计信息
+                    COALESCE(
+                        (
+                            SELECT json_agg(platform_stat)
+                            FROM (
+                                SELECT
+                                    (platform_info->>'platform') as platform,
+                                    COUNT(*) as count
+                                FROM hotspots h2
+                                CROSS JOIN LATERAL jsonb_array_elements(h2.platforms::jsonb) as platform_info
+                                WHERE h2.cluster_id = c.id
+                                GROUP BY (platform_info->>'platform')
+                            ) as platform_stat
+                        ),
+                        '[]'::json
+                    ) as platforms
                 FROM hotspot_clusters c
                 LEFT JOIN hotspots h ON h.cluster_id = c.id
                 WHERE c.id = $1
@@ -197,6 +247,20 @@ class ClusterService:
             if not r:
                 return None
 
+            # 解析平台统计数据
+            platforms_data = r["platforms"]
+            if isinstance(platforms_data, str):
+                platforms_data = json.loads(platforms_data)
+
+            platform_stats = (
+                [
+                    PlatformStat(platform=p["platform"], count=p["count"])
+                    for p in platforms_data
+                ]
+                if platforms_data
+                else []
+            )
+
             return ClusterInfo(
                 id=r["id"],
                 cluster_name=r["cluster_name"],
@@ -207,8 +271,11 @@ class ClusterService:
                 selected_hotspot_id=r["selected_hotspot_id"],
                 created_at=r["created_at"],
                 updated_at=r["updated_at"],
-                statuses=r["statuses"] if isinstance(r["statuses"], list) else json.loads(r["statuses"]),
+                statuses=r["statuses"]
+                if isinstance(r["statuses"], list)
+                else json.loads(r["statuses"]),
                 last_hotspot_update=r["last_hotspot_update"],
+                platforms=platform_stats,
             )
 
     async def create_cluster(

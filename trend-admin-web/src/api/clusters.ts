@@ -30,6 +30,8 @@ export const clustersApi = {
    * 列出所有聚簇
    */
   list: async (params?: {
+    page?: number;
+    page_size?: number;
     status?: string;
     exclude_status?: string;
     platforms?: string;
@@ -38,6 +40,8 @@ export const clustersApi = {
     keyword?: string;
   }): Promise<ListClustersResponse> => {
     const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.page_size) queryParams.append('page_size', params.page_size.toString());
     if (params?.status) queryParams.append('status', params.status);
     if (params?.exclude_status) queryParams.append('exclude_status', params.exclude_status);
     if (params?.platforms) queryParams.append('platforms', params.platforms);

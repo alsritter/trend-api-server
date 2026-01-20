@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
-from typing import Optional, List
+from typing import Optional
 import logging
 import traceback
 from app.services.cluster_service import cluster_service
@@ -56,6 +56,8 @@ async def create_cluster(request: CreateClusterRequest):
 
 @router.get("", response_model=ListClustersResponse)
 async def list_clusters(
+    page: int = Query(1, ge=1, description="页码，从1开始"),
+    page_size: int = Query(20, ge=1, le=100, description="每页数量，最大100"),
     status: Optional[str] = Query(None, description="状态过滤，逗号分隔，如: pending_validation,validated"),
     exclude_status: Optional[str] = Query(None, description="排除状态，逗号分隔，如: archived,outdated"),
     platforms: Optional[str] = Query(None, description="平台过滤，逗号分隔，如: xhs,dy,bili"),
@@ -76,7 +78,9 @@ async def list_clusters(
         platform_list = platforms.split(",") if platforms else None
         status_list = status.split(",") if status else None
         exclude_status_list = exclude_status.split(",") if exclude_status else None
-        items = await cluster_service.list_clusters(
+        result = await cluster_service.list_clusters(
+            page=page,
+            page_size=page_size,
             status=status_list,
             exclude_status=exclude_status_list,
             platforms=platform_list,
@@ -84,7 +88,11 @@ async def list_clusters(
             end_time=end_time,
             keyword=keyword,
         )
-        return ListClustersResponse(success=True, items=items, count=len(items))
+        return ListClustersResponse(
+            success=True,
+            items=result["items"],
+            count=result["total"]
+        )
     except Exception as e:
         logger.error(
             f"列出聚簇时发生错误 - error: {str(e)}, traceback: {traceback.format_exc()}"

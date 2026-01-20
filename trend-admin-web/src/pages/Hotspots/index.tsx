@@ -3,8 +3,10 @@ import { ReloadOutlined, MergeCellsOutlined } from "@ant-design/icons";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { clustersApi } from "@/api/clusters";
+import { hotspotsApi } from "@/api/hotspots";
 import type { ClusterInfo } from "@/types/api";
 import type { Dayjs } from "dayjs";
+import dayjs from "dayjs";
 import { HotspotsFilter } from "./HotspotsFilter";
 import { ClustersTable } from "./ClustersTable";
 import { ClusterExpandedRow } from "./ClusterExpandedRow";
@@ -14,6 +16,10 @@ import { MergeClustersModal } from "./MergeClustersModal";
 
 function Hotspots() {
   const [expandedRowKeys, setExpandedRowKeys] = useState<number[]>([]);
+
+  // 分页状态
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(20);
 
   // 过滤条件状态
   const [filterStatus, setFilterStatus] = useState<string[]>([]);
@@ -43,6 +49,8 @@ function Hotspots() {
   } = useQuery({
     queryKey: [
       "clusters",
+      page,
+      pageSize,
       filterStatus,
       excludeStatus,
       filterPlatforms,
@@ -50,16 +58,19 @@ function Hotspots() {
       searchKeyword
     ],
     queryFn: async () => {
-      const params: any = {};
+      const params: any = {
+        page,
+        page_size: pageSize
+      };
       if (filterStatus.length > 0) params.status = filterStatus.join(",");
       if (excludeStatus.length > 0)
         params.exclude_status = excludeStatus.join(",");
       if (filterPlatforms.length > 0)
         params.platforms = filterPlatforms.join(",");
       if (filterDateRange?.[0])
-        params.start_time = filterDateRange[0].toISOString();
+        params.start_time = filterDateRange[0].format("YYYY-MM-DDTHH:mm:ss");
       if (filterDateRange?.[1])
-        params.end_time = filterDateRange[1].toISOString();
+        params.end_time = filterDateRange[1].format("YYYY-MM-DDTHH:mm:ss");
       if (searchKeyword) params.keyword = searchKeyword;
 
       return clustersApi.list(params);
@@ -98,6 +109,26 @@ function Hotspots() {
     }
   });
 
+  // 验证成功 - 更新聚簇代表热点状态为已验证
+  const validateSuccessMutation = useMutation({
+    mutationFn: async (cluster: ClusterInfo) => {
+      if (!cluster.selected_hotspot_id) {
+        throw new Error("该聚簇没有绑定代表热点");
+      }
+      return hotspotsApi.updateStatusAndSetRepresentative(
+        cluster.selected_hotspot_id,
+        { status: "validated", set_as_representative: true }
+      );
+    },
+    onSuccess: () => {
+      message.success("热点已标记为验证成功");
+      refetchClusters();
+    },
+    onError: (error: any) => {
+      message.error(`验证失败: ${error.message}`);
+    }
+  });
+
   // 合并聚簇
   const mergeClustersMutation = useMutation({
     mutationFn: (data: {
@@ -123,6 +154,20 @@ function Hotspots() {
     setFilterPlatforms([]);
     setFilterDateRange(null);
     setSearchKeyword("");
+    setPage(1);
+  };
+
+  // 快速过滤待审核热词（3小时到2天之间的 pending_validation 状态）
+  const handleQuickFilterPendingValidation = () => {
+    const now = dayjs();
+    const endOfToday = now.endOf("day");
+    const twoDaysAgo = now.subtract(2, "day");
+
+    setFilterStatus(["pending_validation"]);
+    setExcludeStatus([]);
+    setFilterDateRange([twoDaysAgo, endOfToday]);
+    setPage(1);
+    message.info("已应用待审核热词过滤条件（2天前至今天结束）");
   };
 
   // 处理展开/收起聚簇
@@ -143,6 +188,11 @@ function Hotspots() {
   // 处理删除聚簇
   const handleDelete = (clusterId: number) => {
     deleteClusterMutation.mutate(clusterId);
+  };
+
+  // 处理验证成功
+  const handleValidateSuccess = (cluster: ClusterInfo) => {
+    validateSuccessMutation.mutate(cluster);
   };
 
   // 处理编辑确认
@@ -192,6 +242,12 @@ function Hotspots() {
     setMergeModalVisible(false);
   };
 
+  // 处理分页变化
+  const handlePageChange = (newPage: number, newPageSize: number) => {
+    setPage(newPage);
+    setPageSize(newPageSize);
+  };
+
   return (
     <div style={{ padding: "24px" }}>
       <Card
@@ -227,19 +283,24 @@ function Hotspots() {
           onPlatformsChange={setFilterPlatforms}
           onDateRangeChange={setFilterDateRange}
           onReset={handleResetFilters}
+          onQuickFilterPendingValidation={handleQuickFilterPendingValidation}
         />
 
         <ClustersTable
           data={clustersData?.items || []}
           loading={clustersLoading}
           total={clustersData?.count || 0}
+          page={page}
+          pageSize={pageSize}
           expandedRowKeys={expandedRowKeys}
           searchKeyword={searchKeyword}
           selectedRowKeys={selectedRowKeys}
           onExpandChange={handleExpandChange}
           onEdit={handleEdit}
           onDelete={handleDelete}
+          onValidateSuccess={handleValidateSuccess}
           onSelectChange={handleSelectChange}
+          onPageChange={handlePageChange}
           renderExpandedRow={(record) => (
             <ClusterExpandedRow clusterId={record.id} />
           )}

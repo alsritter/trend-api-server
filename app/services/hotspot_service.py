@@ -25,59 +25,6 @@ class HotspotService:
         """初始化热点服务"""
         pass
 
-    async def _validate_hotspot_status(self, conn, hotspot_record: dict) -> None:
-        """
-        验证并更新热词状态（从 pending_validation 到 validated）
-
-        Args:
-            conn: 数据库连接
-            hotspot_record: 热词记录（包含 id, status, last_seen_at, cluster_id）
-        """
-        # 只处理 pending_validation 状态的热词
-        if hotspot_record["status"] != HotspotStatus.PENDING_VALIDATION.value:
-            return
-
-        # 计算时间差
-        now = datetime.now()
-        last_seen_at = hotspot_record["last_seen_at"]
-        time_diff = now - last_seen_at
-
-        # 检查是否在 3 小时到 3 天之间
-        three_hours = timedelta(hours=3)
-        three_days = timedelta(days=3)
-
-        if three_hours <= time_diff <= three_days:
-            cluster_id = hotspot_record["cluster_id"]
-
-            if cluster_id:
-                # 如果有 cluster_id，更新该 cluster 下的所有热词
-                await conn.execute(
-                    """
-                    UPDATE hotspots
-                    SET status = $1,
-                        last_seen_at = CURRENT_TIMESTAMP,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE cluster_id = $2
-                        AND status = $3
-                    """,
-                    HotspotStatus.VALIDATED.value,
-                    cluster_id,
-                    HotspotStatus.PENDING_VALIDATION.value,
-                )
-            else:
-                # 如果没有 cluster_id，只更新当前热词
-                await conn.execute(
-                    """
-                    UPDATE hotspots
-                    SET status = $1,
-                        last_seen_at = CURRENT_TIMESTAMP,
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = $2
-                    """,
-                    HotspotStatus.VALIDATED.value,
-                    hotspot_record["id"],
-                )
-
     def _parse_viewnum(self, viewnum_str: str) -> int:
         """
         解析热度值（将 "541.2万" 这样的字符串转换为数字）
@@ -241,7 +188,9 @@ class HotspotService:
                         )
 
             # 如果没有找到相似的热词，创建一个新的独立cluster
-            if cluster_id is None:
+            # 注意：selected_hotspot_id 将在创建热点后设置
+            create_new_cluster = cluster_id is None
+            if create_new_cluster:
                 cluster_id = await conn.fetchval(
                     """
                     INSERT INTO hotspot_clusters (cluster_name, member_count, keywords)
@@ -348,6 +297,19 @@ class HotspotService:
                 analysis.primary_category,
             )
 
+            # 如果创建了新的聚簇，将当前热点设置为该聚簇的代表热点
+            if create_new_cluster and cluster_id:
+                await conn.execute(
+                    """
+                    UPDATE hotspot_clusters
+                    SET selected_hotspot_id = $1,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = $2
+                    """,
+                    hotspot_id,
+                    cluster_id,
+                )
+
             action = "rejected" if analysis.is_remove else "created"
             status_text = "已拒绝" if analysis.is_remove else "创建成功"
 
@@ -406,9 +368,6 @@ class HotspotService:
             )
 
             if exact_match:
-                # 检查是否需要验证状态更新
-                await self._validate_hotspot_status(conn, exact_match)
-
                 return {
                     "exists": True,
                     "action": "skip",
@@ -489,21 +448,7 @@ class HotspotService:
                 }
 
             elif max_similarity >= self.HIGH_SIMILARITY_THRESHOLD:
-                # 高相似度，更新时间或状态
-                hotspot_record = await conn.fetchrow(
-                    """
-                    SELECT id, keyword, normalized_keyword, status,
-                           first_seen_at, last_seen_at, appearance_count, cluster_id
-                    FROM hotspots
-                    WHERE id = $1
-                    """,
-                    similar_hotspots[0].id,
-                )
-
-                # 检查是否需要验证状态更新
-                await self._validate_hotspot_status(conn, hotspot_record)
-
-                # 更新时间和出现次数
+                # 高相似度，更新时间和出现次数
                 await conn.execute(
                     """
                     UPDATE hotspots
@@ -682,7 +627,9 @@ class HotspotService:
                     filtered_at=r["filtered_at"],
                     rejection_reason=r.get("rejection_reason"),
                     rejected_at=r.get("rejected_at"),
-                    second_stage_rejection_reason=r.get("second_stage_rejection_reason"),
+                    second_stage_rejection_reason=r.get(
+                        "second_stage_rejection_reason"
+                    ),
                     second_stage_rejected_at=r.get("second_stage_rejected_at"),
                     created_at=r["created_at"],
                     updated_at=r["updated_at"],
@@ -831,7 +778,9 @@ class HotspotService:
                     filtered_at=r["filtered_at"],
                     rejection_reason=r.get("rejection_reason"),
                     rejected_at=r.get("rejected_at"),
-                    second_stage_rejection_reason=r.get("second_stage_rejection_reason"),
+                    second_stage_rejection_reason=r.get(
+                        "second_stage_rejection_reason"
+                    ),
                     second_stage_rejected_at=r.get("second_stage_rejected_at"),
                     created_at=r["created_at"],
                     updated_at=r["updated_at"],
@@ -1191,7 +1140,10 @@ class HotspotService:
             }
 
     async def update_hotspot_status_and_set_representative(
-        self, hotspot_id: int, new_status: HotspotStatus, set_as_representative: bool = True
+        self,
+        hotspot_id: int,
+        new_status: HotspotStatus,
+        set_as_representative: bool = True,
     ) -> Dict[str, Any]:
         """
         更新热词状态，并可选设置为聚簇代表
@@ -1578,6 +1530,40 @@ class HotspotService:
                 "hotspot_id": hotspot_id,
                 "old_status": old_status,
             }
+
+    async def update_outdated_pending_validation_hotspots(
+        self, cutoff_datetime: datetime
+    ) -> int:
+        """
+        更新三天前仍为 pending_validation 状态的热点为 rejected
+
+        Args:
+            cutoff_datetime: 截止时间，早于此时间创建的 pending_validation 热点将被拒绝
+
+        Returns:
+            更新的热点数量
+        """
+        async with session.pg_pool.acquire() as conn:
+            # 更新所有在 cutoff_datetime 之前创建且仍为 pending_validation 状态的热点
+            result = await conn.execute(
+                """
+                UPDATE hotspots
+                SET status = $1,
+                    rejection_reason = $2,
+                    rejected_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE status = $3
+                  AND created_at < $4
+                """,
+                HotspotStatus.REJECTED.value,
+                "超时未更新",
+                HotspotStatus.PENDING_VALIDATION.value,
+                cutoff_datetime,
+            )
+
+            # 从 result 字符串中提取更新数量，格式类似 "UPDATE 5"
+            updated_count = int(result.split()[-1]) if result else 0
+            return updated_count
 
 
 # 全局热点服务实例

@@ -34,14 +34,16 @@ CREATE TABLE hotspots (
 
     -- 状态流转
     status VARCHAR(50) DEFAULT 'pending_validation' CHECK (status IN (
-        'pending_validation',    -- 等待持续性验证（首次出现）
-        'validated',             -- 已验证有持续性（6小时内二次出现）
-        'rejected',              -- 已过滤（无商业价值）
-        'crawling',              -- 爬虫进行中
-        'crawled',               -- 爬取完成，等待分析
-        'analyzing',             -- 商业分析中
-        'analyzed',              -- 分析完成
-        'archived'               -- 已归档
+        'pending_validation',      -- 等待持续性验证（首次出现）
+        'validated',               -- 已验证有持续性（6小时内二次出现）
+        'rejected',                -- 已过滤（无商业价值，第一阶段被拒绝）
+        'second_stage_rejected',   -- 第二阶段被拒绝（深度分析后）
+        'crawling',                -- 爬虫进行中
+        'crawled',                 -- 爬取完成，等待分析
+        'analyzing',               -- 商业分析中
+        'analyzed',                -- 分析完成
+        'archived',                -- 已归档
+        'outdated'                 -- 已过时（超过指定天数未更新）
     )),
 
     -- 爬取控制

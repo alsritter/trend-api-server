@@ -1,5 +1,9 @@
 import { Space, Input, Select, DatePicker, Button } from "antd";
-import { SearchOutlined, FilterOutlined } from "@ant-design/icons";
+import {
+  SearchOutlined,
+  FilterOutlined,
+  CheckCircleOutlined
+} from "@ant-design/icons";
 import type { Dayjs } from "dayjs";
 import { STATUS_MAP, PLATFORM_MAP } from "./constants";
 
@@ -17,6 +21,7 @@ interface HotspotsFilterProps {
   onPlatformsChange: (values: string[]) => void;
   onDateRangeChange: (dates: [Dayjs | null, Dayjs | null] | null) => void;
   onReset: () => void;
+  onQuickFilterPendingValidation: () => void;
 }
 
 export function HotspotsFilter({
@@ -30,7 +35,8 @@ export function HotspotsFilter({
   onExcludeStatusChange,
   onPlatformsChange,
   onDateRangeChange,
-  onReset
+  onReset,
+  onQuickFilterPendingValidation
 }: HotspotsFilterProps) {
   return (
     <Space style={{ marginBottom: 16 }} wrap>
@@ -97,6 +103,14 @@ export function HotspotsFilter({
         format="YYYY-MM-DD HH:mm"
         placeholder={["开始时间", "结束时间"]}
       />
+
+      <Button
+        type="primary"
+        icon={<CheckCircleOutlined />}
+        onClick={onQuickFilterPendingValidation}
+      >
+        待审核热词
+      </Button>
 
       <Button icon={<FilterOutlined />} onClick={onReset}>
         重置过滤
