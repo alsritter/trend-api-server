@@ -149,7 +149,7 @@ function Hotspots() {
         hotspot_id: cluster.selected_hotspot_id,
         platforms: platforms,
         crawler_type: "search",
-        max_notes_count: 50,
+        max_notes_count: 3,
         enable_comments: true,
         enable_sub_comments: false,
         max_comments_count: 20

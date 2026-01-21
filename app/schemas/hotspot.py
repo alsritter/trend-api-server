@@ -161,6 +161,7 @@ class HotspotDetail(BaseModel):
     reasoning_risk: Optional[List[str]] = Field(None, description="风险列表")
     platform_url: Optional[str] = Field(None, description="平台URL")
     primary_category: Optional[str] = Field(None, description="主要分类")
+    word_cover: Optional[dict] = Field(None, description="词封面信息")
 
 
 class ListHotspotsRequest(BaseModel):

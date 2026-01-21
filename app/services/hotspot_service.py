@@ -79,10 +79,11 @@ class HotspotService:
             )
 
             if existing_hotspot:
-                # 提取平台 URL（如果有）
+                # 提取平台 URL 和 word_cover（如果有）
                 platform_url = platform_data.url if platform_data else None
+                word_cover = platform_data.word_cover if platform_data else None
 
-                # 更新现有热点的 AI 分析信息和平台 URL
+                # 更新现有热点的 AI 分析信息、平台 URL 和 word_cover
                 await conn.execute(
                     """
                     UPDATE hotspots
@@ -95,7 +96,8 @@ class HotspotService:
                         reasoning_keep = $5,
                         reasoning_risk = $6,
                         primary_category = $7,
-                        platform_url = COALESCE($8, platform_url)
+                        platform_url = COALESCE($8, platform_url),
+                        word_cover = COALESCE($9, word_cover)
                     WHERE id = $1
                     """,
                     existing_hotspot["id"],
@@ -106,6 +108,7 @@ class HotspotService:
                     analysis.reasoning.risk if analysis.reasoning.risk else [],
                     analysis.primary_category,
                     platform_url,
+                    json.dumps(word_cover) if word_cover else None,
                 )
 
                 return {
@@ -257,8 +260,9 @@ class HotspotService:
                 filter_reason = None
                 filtered_at = None
 
-            # 提取平台 URL
+            # 提取平台 URL 和 word_cover
             platform_url = platform_data.url if platform_data else None
+            word_cover = platform_data.word_cover if platform_data else None
 
             now = datetime.now()
             hotspot_id = await conn.fetchval(
@@ -268,9 +272,9 @@ class HotspotService:
                     cluster_id, first_seen_at, last_seen_at, appearance_count, platforms,
                     status, is_filtered, filter_reason, filtered_at,
                     tags, confidence, opportunities, reasoning_keep, reasoning_risk, 
-                    platform_url, primary_category
+                    platform_url, primary_category, word_cover
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
                 RETURNING id
                 """,
                 analysis.title,
@@ -294,6 +298,7 @@ class HotspotService:
                 analysis.reasoning.risk if analysis.reasoning.risk else [],
                 platform_url,
                 analysis.primary_category,
+                json.dumps(word_cover) if word_cover else None,
             )
 
             # 如果创建了新的聚簇，将当前热点设置为该聚簇的代表热点
@@ -640,6 +645,11 @@ class HotspotService:
                     reasoning_risk=r.get("reasoning_risk"),
                     platform_url=r.get("platform_url"),
                     primary_category=r.get("primary_category"),
+                    word_cover=(
+                        json.loads(r.get("word_cover"))
+                        if r.get("word_cover") and isinstance(r.get("word_cover"), str)
+                        else r.get("word_cover")
+                    ),
                 )
                 for r in records
             ]
@@ -727,6 +737,11 @@ class HotspotService:
                 reasoning_risk=r.get("reasoning_risk"),
                 platform_url=r.get("platform_url"),
                 primary_category=r.get("primary_category"),
+                word_cover=(
+                    json.loads(r.get("word_cover"))
+                    if r.get("word_cover") and isinstance(r.get("word_cover"), str)
+                    else r.get("word_cover")
+                ),
             )
 
     async def get_cluster_hotspots(self, cluster_id: int) -> List[HotspotDetail]:
@@ -791,6 +806,11 @@ class HotspotService:
                     reasoning_risk=r.get("reasoning_risk"),
                     platform_url=r.get("platform_url"),
                     primary_category=r.get("primary_category"),
+                    word_cover=(
+                        json.loads(r.get("word_cover"))
+                        if r.get("word_cover") and isinstance(r.get("word_cover"), str)
+                        else r.get("word_cover")
+                    ),
                 )
                 for r in records
             ]
