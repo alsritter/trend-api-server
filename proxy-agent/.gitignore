@@ -1,0 +1,43 @@
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# 日志文件
+*.log
+
+# 配置文件（包含敏感信息）
+config.yaml
+
+# Agent ID 文件
+.agent_id
+
+# 3proxy 配置和日志
+3proxy.cfg
+3proxy.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# uv
+uv.lock
+.python-version
+
+# 虚拟环境
+venv/
+env/
+ENV/
+.venv/

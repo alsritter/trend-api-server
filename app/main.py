@@ -24,10 +24,12 @@ from app.api.v1 import (
     hotspots,
     clusters,
     push,
+    home_proxy,
 )
 
 # 全局任务控制
 timeout_check_task = None
+proxy_health_checker = None
 
 # 配置日志
 logging.basicConfig(
@@ -41,7 +43,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    global timeout_check_task
+    global timeout_check_task, proxy_health_checker
 
     # 启动时初始化数据库连接
     await init_db()
@@ -50,12 +52,22 @@ async def lifespan(app: FastAPI):
     # 启动后台超时检查任务
     timeout_check_task = asyncio.create_task(check_timeout_tasks_background())
 
+    # 启动代理健康检查器
+    from app.db.session import pg_pool
+    from app.proxy_pool.service import ProxyPoolService
+    from app.proxy_pool.scheduler import ProxyHealthChecker
+
+    proxy_service = ProxyPoolService(pg_pool)
+    proxy_health_checker = ProxyHealthChecker(proxy_service, check_interval=60)
+    proxy_health_checker.start()
+
     print("=" * 60)
     print("Trend API Server started successfully!")
     print(f"API Documentation: http://localhost:{settings.API_PORT}/docs")
     print(f"Frontend Path: http://localhost:{settings.API_PORT}/")
     print(f"Vector Management: http://localhost:{settings.API_PORT}/vectors.html")
     print("Timeout Checker: Running (interval: 5 minutes)")
+    print("Proxy Health Checker: Running (interval: 60 seconds)")
     print("=" * 60)
 
     yield
@@ -72,6 +84,11 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
         print("[Timeout Checker] Stopped")
+
+    # 停止代理健康检查器
+    if proxy_health_checker:
+        await proxy_health_checker.stop()
+        print("[Proxy Health Checker] Stopped")
 
     await close_db()
     await close_vector_db()
@@ -111,6 +128,7 @@ app.include_router(vectors.router, prefix="/api/v1/vectors", tags=["Vectors"])
 app.include_router(hotspots.router, prefix="/api/v1/hotspots", tags=["Hotspots"])
 app.include_router(clusters.router, prefix="/api/v1/clusters", tags=["Clusters"])
 app.include_router(push.router, prefix="/api/v1/push", tags=["Push"])
+app.include_router(home_proxy.router, prefix="/api/v1/home-proxy", tags=["Home Proxy Pool"])
 
 
 # 静态文件目录配置

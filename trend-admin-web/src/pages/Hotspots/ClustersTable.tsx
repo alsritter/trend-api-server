@@ -139,11 +139,7 @@ export function ClustersTable({
                 icon={<CheckCircleOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
-                  Modal.confirm({
-                    title: "确认验证成功",
-                    content: `确定要将聚簇"${record.cluster_name}"的代表热点标记为已验证吗？`,
-                    onOk: () => onValidateSuccess(record)
-                  });
+                  onValidateSuccess(record);
                 }}
               />
             </Tooltip>
@@ -157,11 +153,7 @@ export function ClustersTable({
                 icon={<CloudDownloadOutlined />}
                 onClick={(e) => {
                   e.stopPropagation();
-                  Modal.confirm({
-                    title: "确认触发爬取",
-                    content: `确定要为聚簇"${record.cluster_name}"的代表热点触发爬虫任务吗？`,
-                    onOk: () => onTriggerCrawl(record)
-                  });
+                  onTriggerCrawl(record);
                 }}
               />
             </Tooltip>
