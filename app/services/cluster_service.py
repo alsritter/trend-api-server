@@ -19,6 +19,7 @@ class ClusterService:
         status: Optional[List[str]] = None,
         exclude_status: Optional[List[str]] = None,
         platforms: Optional[List[str]] = None,
+        exclude_platforms: Optional[List[str]] = None,
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
         keyword: Optional[str] = None,
@@ -32,6 +33,7 @@ class ClusterService:
             status: 热点状态列表过滤
             exclude_status: 排除的热点状态列表
             platforms: 平台列表过滤
+            exclude_platforms: 排除的平台列表
             start_time: 开始时间过滤
             end_time: 结束时间过滤
             keyword: 搜索关键词，用于搜索聚簇名称和关键词
@@ -76,6 +78,18 @@ class ClusterService:
                 conditions.append(f"({platform_conditions})")
                 params.extend(platforms)
                 param_counter += len(platforms)
+
+            if exclude_platforms:
+                # 排除平台：使用 NOT EXISTS 子查询检查数组中不包含指定平台
+                exclude_platform_conditions = " AND ".join(
+                    [
+                        f"NOT EXISTS (SELECT 1 FROM jsonb_array_elements(h.platforms) AS p WHERE p->>'platform' = ${param_counter + i})"
+                        for i in range(len(exclude_platforms))
+                    ]
+                )
+                conditions.append(f"({exclude_platform_conditions})")
+                params.extend(exclude_platforms)
+                param_counter += len(exclude_platforms)
 
             if start_time:
                 conditions.append(f"h.updated_at >= ${param_counter}")

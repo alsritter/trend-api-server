@@ -13,7 +13,7 @@ class TaskCreateRequest(BaseModel):
     max_notes_count: int = Field(10, ge=1, le=1000, description="最大爬取数量")
     enable_comments: bool = Field(True, description="是否爬取评论")
     enable_sub_comments: bool = Field(False, description="是否爬取二级评论")
-    max_comments_count: int = Field(20, ge=1, le=500, description="每条内容最大评论数量")
+    max_comments_count: int = Field(3, ge=1, le=500, description="每条内容最大评论数量")
     hotspot_id: Optional[int] = Field(None, description="关联的热点ID（触发式爬虫）")
     
     # 平台特定的指定ID/URL列表

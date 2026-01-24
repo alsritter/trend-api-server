@@ -14,11 +14,13 @@ interface HotspotsFilterProps {
   filterStatus: string[];
   excludeStatus: string[];
   filterPlatforms: string[];
+  excludePlatforms: string[];
   filterDateRange: [Dayjs | null, Dayjs | null] | null;
   onSearchChange: (value: string) => void;
   onStatusChange: (values: string[]) => void;
   onExcludeStatusChange: (values: string[]) => void;
   onPlatformsChange: (values: string[]) => void;
+  onExcludePlatformsChange: (values: string[]) => void;
   onDateRangeChange: (dates: [Dayjs | null, Dayjs | null] | null) => void;
   onReset: () => void;
   onQuickFilterPendingValidation: () => void;
@@ -29,11 +31,13 @@ export function HotspotsFilter({
   filterStatus,
   excludeStatus,
   filterPlatforms,
+  excludePlatforms,
   filterDateRange,
   onSearchChange,
   onStatusChange,
   onExcludeStatusChange,
   onPlatformsChange,
+  onExcludePlatformsChange,
   onDateRangeChange,
   onReset,
   onQuickFilterPendingValidation
@@ -87,6 +91,22 @@ export function HotspotsFilter({
         value={filterPlatforms}
         onChange={onPlatformsChange}
         style={{ width: 250 }}
+        maxTagCount="responsive"
+      >
+        {Object.entries(PLATFORM_MAP).map(([value, label]) => (
+          <Select.Option key={value} value={value}>
+            {label}
+          </Select.Option>
+        ))}
+      </Select>
+
+      <Select
+        mode="multiple"
+        placeholder="排除平台（反选）"
+        value={excludePlatforms}
+        onChange={onExcludePlatformsChange}
+        style={{ width: 250 }}
+        allowClear
         maxTagCount="responsive"
       >
         {Object.entries(PLATFORM_MAP).map(([value, label]) => (

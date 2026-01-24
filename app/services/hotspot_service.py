@@ -1281,10 +1281,10 @@ class HotspotService:
         hotspot_id: int,
         platforms: List[str],
         crawler_type: str = "search",
-        max_notes_count: int = 50,
+        max_notes_count: int = 10,
         enable_comments: bool = True,
         enable_sub_comments: bool = False,
-        max_comments_count: int = 20,
+        max_comments_count: int = 3,
     ) -> Dict[str, Any]:
         """
         为指定热点触发爬虫任务

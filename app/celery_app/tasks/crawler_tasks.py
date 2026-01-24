@@ -259,7 +259,7 @@ def run_crawler(
     max_notes_count: int = 10,
     enable_comments: bool = True,
     enable_sub_comments: bool = False,
-    max_comments_count: int = 20,
+    max_comments_count: int = 3,
     hotspot_id: str = "",  # 新增热点ID参数
     # 平台特定的指定ID/URL列表
     xhs_note_url_list: list = None,

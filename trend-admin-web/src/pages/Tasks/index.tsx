@@ -470,7 +470,7 @@ function Tasks() {
             max_notes_count: 10,
             enable_comments: true,
             enable_sub_comments: false,
-            max_comments_count: 20
+            max_comments_count: 3
           }}
         >
           <Form.Item

@@ -26,6 +26,7 @@ function Hotspots() {
   const [filterStatus, setFilterStatus] = useState<string[]>([]);
   const [excludeStatus, setExcludeStatus] = useState<string[]>([]);
   const [filterPlatforms, setFilterPlatforms] = useState<string[]>([]);
+  const [excludePlatforms, setExcludePlatforms] = useState<string[]>([]);
   const [filterDateRange, setFilterDateRange] = useState<
     [Dayjs | null, Dayjs | null] | null
   >(null);
@@ -55,6 +56,7 @@ function Hotspots() {
       filterStatus,
       excludeStatus,
       filterPlatforms,
+      excludePlatforms,
       filterDateRange,
       searchKeyword
     ],
@@ -68,6 +70,8 @@ function Hotspots() {
         params.exclude_status = excludeStatus.join(",");
       if (filterPlatforms.length > 0)
         params.platforms = filterPlatforms.join(",");
+      if (excludePlatforms.length > 0)
+        params.exclude_platforms = excludePlatforms.join(",");
       if (filterDateRange?.[0])
         params.start_time = filterDateRange[0].format("YYYY-MM-DDTHH:mm:ss");
       if (filterDateRange?.[1])
@@ -187,6 +191,7 @@ function Hotspots() {
     setFilterStatus([]);
     setExcludeStatus([]);
     setFilterPlatforms([]);
+    setExcludePlatforms([]);
     setFilterDateRange(null);
     setSearchKeyword("");
     setPage(1);
@@ -317,11 +322,13 @@ function Hotspots() {
           filterStatus={filterStatus}
           excludeStatus={excludeStatus}
           filterPlatforms={filterPlatforms}
+          excludePlatforms={excludePlatforms}
           filterDateRange={filterDateRange}
           onSearchChange={setSearchKeyword}
           onStatusChange={setFilterStatus}
           onExcludeStatusChange={setExcludeStatus}
           onPlatformsChange={setFilterPlatforms}
+          onExcludePlatformsChange={setExcludePlatforms}
           onDateRangeChange={setFilterDateRange}
           onReset={handleResetFilters}
           onQuickFilterPendingValidation={handleQuickFilterPendingValidation}

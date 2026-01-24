@@ -423,12 +423,12 @@ class TriggerCrawlRequest(BaseModel):
         pattern="^(search|detail|creator|homefeed)$",
     )
     max_notes_count: int = Field(
-        default=50, ge=1, le=1000, description="每个平台最大爬取数量"
+        default=10, ge=1, le=1000, description="每个平台最大爬取数量"
     )
     enable_comments: bool = Field(default=True, description="是否爬取评论")
     enable_sub_comments: bool = Field(default=False, description="是否爬取二级评论")
     max_comments_count: int = Field(
-        default=20, ge=1, le=500, description="每条内容最大评论数量"
+        default=3, ge=1, le=500, description="每条内容最大评论数量"
     )
 
 

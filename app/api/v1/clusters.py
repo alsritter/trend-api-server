@@ -61,6 +61,7 @@ async def list_clusters(
     status: Optional[str] = Query(None, description="状态过滤，逗号分隔，如: pending_validation,validated"),
     exclude_status: Optional[str] = Query(None, description="排除状态，逗号分隔，如: archived,outdated"),
     platforms: Optional[str] = Query(None, description="平台过滤，逗号分隔，如: xhs,dy,bili"),
+    exclude_platforms: Optional[str] = Query(None, description="排除平台，逗号分隔，如: xhs,dy,bili"),
     start_time: Optional[str] = Query(None, description="开始时间过滤 (ISO格式)"),
     end_time: Optional[str] = Query(None, description="结束时间过滤 (ISO格式)"),
     keyword: Optional[str] = Query(None, description="搜索关键词，用于搜索聚簇名称和关键词"),
@@ -72,10 +73,12 @@ async def list_clusters(
     - status: 按热点状态过滤（逗号分隔）
     - exclude_status: 排除指定状态（逗号分隔）
     - platforms: 按平台过滤（逗号分隔）
+    - exclude_platforms: 排除平台（逗号分隔）
     - start_time/end_time: 按时间范围过滤
     """
     try:
         platform_list = platforms.split(",") if platforms else None
+        exclude_platform_list = exclude_platforms.split(",") if exclude_platforms else None
         status_list = status.split(",") if status else None
         exclude_status_list = exclude_status.split(",") if exclude_status else None
         result = await cluster_service.list_clusters(
@@ -84,6 +87,7 @@ async def list_clusters(
             status=status_list,
             exclude_status=exclude_status_list,
             platforms=platform_list,
+            exclude_platforms=exclude_platform_list,
             start_time=start_time,
             end_time=end_time,
             keyword=keyword,

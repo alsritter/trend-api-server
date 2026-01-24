@@ -38,6 +38,7 @@ export const clustersApi = {
     start_time?: string;
     end_time?: string;
     keyword?: string;
+    exclude_platforms?: string;
   }): Promise<ListClustersResponse> => {
     const queryParams = new URLSearchParams();
     if (params?.page) queryParams.append('page', params.page.toString());
@@ -48,6 +49,7 @@ export const clustersApi = {
     if (params?.start_time) queryParams.append('start_time', params.start_time);
     if (params?.end_time) queryParams.append('end_time', params.end_time);
     if (params?.keyword) queryParams.append('keyword', params.keyword);
+    if (params?.exclude_platforms) queryParams.append('exclude_platforms', params.exclude_platforms);
     
     const url = queryParams.toString() ? `${BASE_PATH}?${queryParams}` : BASE_PATH;
     return apiClient.get(url);
