@@ -16,63 +16,28 @@ from datetime import datetime
 class ContentService:
     """内容服务类 - 提供跨平台的内容和评论查询功能"""
 
-    # 字段映射：标准字段名 -> 可能的平台字段名列表
-    FIELD_MAPPINGS = {
-        # 内容字段
-        "title": ["title"],
-        "desc": ["desc", "description"],
-        "content_text": ["content", "note_card_content", "content_text"],
-        "user_id": ["user_id"],
-        "nickname": ["nickname", "author_name"],
-        "avatar": ["avatar", "user_avatar"],
-        "ip_location": ["ip_location"],
-        "liked_count": ["liked_count", "like_count", "digg_count"],
-        "collected_count": ["collected_count", "collect_count", "favorite_count"],
-        "comment_count": ["comment_count", "comments_count"],
-        "share_count": ["share_count"],
-        "view_count": ["view_count", "play_count"],
-        "time": ["time"],
-        "create_time": ["create_time", "created_time"],
-        "add_ts": ["add_ts"],
-        "last_modify_ts": ["last_modify_ts"],
-        # 评论字段
-        "comment_content": ["content", "comment_content"],
-        "sub_comment_count": ["sub_comment_count"],
-    }
-
     def __init__(self):
         """初始化内容服务"""
         pass
-
-    def _get_field_value(self, raw_dict: dict, field_name: str) -> Any:
-        """
-        从原始数据中获取字段值（处理不同平台的字段名差异）
-
-        Args:
-            raw_dict: 原始数据库记录
-            field_name: 标准字段名
-
-        Returns:
-            字段值，如果不存在则返回 None
-        """
-        possible_names = self.FIELD_MAPPINGS.get(field_name, [field_name])
-        for name in possible_names:
-            if name in raw_dict and raw_dict[name] is not None:
-                return raw_dict[name]
-        return None
 
     def _parse_datetime(self, value: Any) -> Optional[datetime]:
         """
         解析日期时间字段
 
         Args:
-            value: 可能是 datetime、字符串或 None
+            value: 可能是 datetime、字符串、整数时间戳或 None
 
         Returns:
             datetime 对象或 None
         """
         if isinstance(value, datetime):
             return value
+        if isinstance(value, (int, float)):
+            try:
+                # 假设是秒级时间戳
+                return datetime.fromtimestamp(value)
+            except Exception:
+                return None
         if isinstance(value, str):
             try:
                 return datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -80,6 +45,471 @@ class ContentService:
                 return None
         return None
 
+    # ========== 小红书映射 ==========
+    def _map_xhs_content(
+        self,
+        raw: dict,
+        hotspot_id: Optional[int] = None,
+        hotspot_keyword: Optional[str] = None,
+    ) -> StructuredContent:
+        """映射小红书内容"""
+        return StructuredContent(
+            platform="xhs",
+            content_id=str(raw.get("id", "")),
+            title=raw.get("title"),
+            desc=raw.get("desc"),
+            content_text=raw.get("desc"),  # 小红书的文本内容在 desc 字段
+            user_id=str(raw.get("user_id", "")),
+            nickname=raw.get("nickname"),
+            avatar=raw.get("avatar"),
+            ip_location=raw.get("ip_location"),
+            liked_count=raw.get("liked_count"),
+            collected_count=raw.get("collected_count"),
+            comment_count=raw.get("comment_count"),
+            share_count=raw.get("share_count"),
+            view_count=None,
+            time=str(raw.get("time", "")) if raw.get("time") else None,
+            create_time=self._parse_datetime(raw.get("time")),
+            add_ts=raw.get("add_ts"),
+            last_modify_ts=raw.get("last_modify_ts"),
+            hotspot_id=hotspot_id or raw.get("hotspot_id"),
+            hotspot_keyword=hotspot_keyword or raw.get("hotspot_keyword"),
+            platform_specific={
+                "note_id": raw.get("note_id"),
+                "type": raw.get("type"),
+                "video_url": raw.get("video_url"),
+                "last_update_time": raw.get("last_update_time"),
+                "image_list": raw.get("image_list"),
+                "tag_list": raw.get("tag_list"),
+                "note_url": raw.get("note_url"),
+                "source_keyword": raw.get("source_keyword"),
+            },
+            comments=raw.get("comments", []),
+        )
+
+    def _map_xhs_comment(self, raw: dict) -> StructuredComment:
+        """映射小红书评论"""
+        return StructuredComment(
+            platform="xhs",
+            comment_id=str(raw.get("comment_id", "")),
+            content=raw.get("content"),
+            user_id=str(raw.get("user_id", "")),
+            nickname=raw.get("nickname"),
+            avatar=raw.get("avatar"),
+            ip_location=raw.get("ip_location"),
+            liked_count=raw.get("like_count"),
+            sub_comment_count=raw.get("sub_comment_count"),
+            create_time=self._parse_datetime(raw.get("create_time")),
+            add_ts=raw.get("add_ts"),
+            last_modify_ts=raw.get("last_modify_ts"),
+            platform_specific={
+                "note_id": raw.get("note_id"),
+                "pictures": raw.get("pictures"),
+                "parent_comment_id": raw.get("parent_comment_id"),
+                "note_url": raw.get("note_url"),
+                "target_comment_id": raw.get("target_comment_id"),
+            },
+        )
+
+    # ========== 抖音映射 ==========
+    def _map_douyin_content(
+        self,
+        raw: dict,
+        hotspot_id: Optional[int] = None,
+        hotspot_keyword: Optional[str] = None,
+    ) -> StructuredContent:
+        """映射抖音内容"""
+        return StructuredContent(
+            platform="dy",
+            content_id=str(raw.get("id", "")),
+            title=raw.get("title"),
+            desc=raw.get("desc"),
+            content_text=raw.get("desc"),
+            user_id=str(raw.get("user_id", "")),
+            nickname=raw.get("nickname"),
+            avatar=raw.get("avatar"),
+            ip_location=raw.get("ip_location"),
+            liked_count=raw.get("liked_count"),
+            collected_count=raw.get("collected_count"),
+            comment_count=raw.get("comment_count"),
+            share_count=raw.get("share_count"),
+            view_count=None,
+            time=str(raw.get("create_time", "")) if raw.get("create_time") else None,
+            create_time=self._parse_datetime(raw.get("create_time")),
+            add_ts=raw.get("add_ts"),
+            last_modify_ts=raw.get("last_modify_ts"),
+            hotspot_id=hotspot_id or raw.get("hotspot_id"),
+            hotspot_keyword=hotspot_keyword or raw.get("hotspot_keyword"),
+            platform_specific={
+                "aweme_id": raw.get("aweme_id"),
+                "aweme_type": raw.get("aweme_type"),
+                "sec_uid": raw.get("sec_uid"),
+                "short_user_id": raw.get("short_user_id"),
+                "user_unique_id": raw.get("user_unique_id"),
+                "user_signature": raw.get("user_signature"),
+                "aweme_url": raw.get("aweme_url"),
+                "cover_url": raw.get("cover_url"),
+                "video_download_url": raw.get("video_download_url"),
+                "source_keyword": raw.get("source_keyword"),
+                "is_ai_generated": raw.get("is_ai_generated"),
+            },
+            comments=raw.get("comments", []),
+        )
+
+    def _map_douyin_comment(self, raw: dict) -> StructuredComment:
+        """映射抖音评论"""
+        return StructuredComment(
+            platform="dy",
+            comment_id=str(raw.get("comment_id", "")),
+            content=raw.get("content"),
+            user_id=str(raw.get("user_id", "")),
+            nickname=raw.get("nickname"),
+            avatar=raw.get("avatar"),
+            ip_location=raw.get("ip_location"),
+            liked_count=raw.get("like_count"),
+            sub_comment_count=raw.get("sub_comment_count"),
+            create_time=self._parse_datetime(raw.get("create_time")),
+            add_ts=raw.get("add_ts"),
+            last_modify_ts=raw.get("last_modify_ts"),
+            platform_specific={
+                "aweme_id": raw.get("aweme_id"),
+                "sec_uid": raw.get("sec_uid"),
+                "short_user_id": raw.get("short_user_id"),
+                "user_unique_id": raw.get("user_unique_id"),
+                "user_signature": raw.get("user_signature"),
+                "parent_comment_id": raw.get("parent_comment_id"),
+                "pictures": raw.get("pictures"),
+                "reply_to_reply_id": raw.get("reply_to_reply_id"),
+            },
+        )
+
+    # ========== B站映射 ==========
+    def _map_bilibili_content(
+        self,
+        raw: dict,
+        hotspot_id: Optional[int] = None,
+        hotspot_keyword: Optional[str] = None,
+    ) -> StructuredContent:
+        """映射B站内容"""
+        return StructuredContent(
+            platform="bili",
+            content_id=str(raw.get("id", "")),
+            title=raw.get("title"),
+            desc=raw.get("desc"),
+            content_text=raw.get("desc"),
+            user_id=str(raw.get("user_id", "")),
+            nickname=raw.get("nickname"),
+            avatar=raw.get("avatar"),
+            ip_location=None,
+            liked_count=raw.get("liked_count"),
+            collected_count=None,
+            comment_count=raw.get("video_comment"),
+            share_count=None,
+            view_count=raw.get("video_play_count"),
+            time=str(raw.get("create_time", "")) if raw.get("create_time") else None,
+            create_time=self._parse_datetime(raw.get("create_time")),
+            add_ts=raw.get("add_ts"),
+            last_modify_ts=raw.get("last_modify_ts"),
+            hotspot_id=hotspot_id or raw.get("hotspot_id"),
+            hotspot_keyword=hotspot_keyword or raw.get("hotspot_keyword"),
+            platform_specific={
+                "video_id": raw.get("video_id"),
+                "bvid": raw.get("bvid"),
+                "video_type": raw.get("video_type"),
+                "video_danmaku": raw.get("video_danmaku"),
+                "video_url": raw.get("video_url"),
+                "video_cover_url": raw.get("video_cover_url"),
+                "source_keyword": raw.get("source_keyword"),
+                "duration": raw.get("duration"),
+            },
+            comments=raw.get("comments", []),
+        )
+
+    def _map_bilibili_comment(self, raw: dict) -> StructuredComment:
+        """映射B站评论"""
+        return StructuredComment(
+            platform="bili",
+            comment_id=str(raw.get("comment_id", "")),
+            content=raw.get("content"),
+            user_id=str(raw.get("user_id", "")),
+            nickname=raw.get("nickname"),
+            avatar=raw.get("avatar"),
+            ip_location=None,
+            liked_count=raw.get("like_count"),
+            sub_comment_count=raw.get("sub_comment_count"),
+            create_time=self._parse_datetime(raw.get("create_time")),
+            add_ts=raw.get("add_ts"),
+            last_modify_ts=raw.get("last_modify_ts"),
+            platform_specific={
+                "video_id": raw.get("video_id"),
+                "parent_comment_id": raw.get("parent_comment_id"),
+            },
+        )
+
+    # ========== 快手映射 ==========
+    def _map_kuaishou_content(
+        self,
+        raw: dict,
+        hotspot_id: Optional[int] = None,
+        hotspot_keyword: Optional[str] = None,
+    ) -> StructuredContent:
+        """映射快手内容"""
+        return StructuredContent(
+            platform="ks",
+            content_id=str(raw.get("id", "")),
+            title=raw.get("title"),
+            desc=raw.get("desc"),
+            content_text=raw.get("desc"),
+            user_id=str(raw.get("user_id", "")),
+            nickname=raw.get("nickname"),
+            avatar=raw.get("avatar"),
+            ip_location=None,
+            liked_count=raw.get("liked_count"),
+            collected_count=None,
+            comment_count=None,
+            share_count=None,
+            view_count=raw.get("viewd_count"),
+            time=str(raw.get("create_time", "")) if raw.get("create_time") else None,
+            create_time=self._parse_datetime(raw.get("create_time")),
+            add_ts=raw.get("add_ts"),
+            last_modify_ts=raw.get("last_modify_ts"),
+            hotspot_id=hotspot_id or raw.get("hotspot_id"),
+            hotspot_keyword=hotspot_keyword or raw.get("hotspot_keyword"),
+            platform_specific={
+                "video_id": raw.get("video_id"),
+                "video_type": raw.get("video_type"),
+                "video_url": raw.get("video_url"),
+                "video_cover_url": raw.get("video_cover_url"),
+                "video_play_url": raw.get("video_play_url"),
+                "source_keyword": raw.get("source_keyword"),
+            },
+            comments=raw.get("comments", []),
+        )
+
+    def _map_kuaishou_comment(self, raw: dict) -> StructuredComment:
+        """映射快手评论"""
+        return StructuredComment(
+            platform="ks",
+            comment_id=str(raw.get("comment_id", "")),
+            content=raw.get("content"),
+            user_id=str(raw.get("user_id", "")),
+            nickname=raw.get("nickname"),
+            avatar=raw.get("avatar"),
+            ip_location=None,
+            liked_count=raw.get("like_count"),
+            sub_comment_count=raw.get("sub_comment_count"),
+            create_time=self._parse_datetime(raw.get("create_time")),
+            add_ts=raw.get("add_ts"),
+            last_modify_ts=raw.get("last_modify_ts"),
+            platform_specific={
+                "video_id": raw.get("video_id"),
+                "parent_comment_id": raw.get("parent_comment_id"),
+            },
+        )
+
+    # ========== 微博映射 ==========
+    def _map_weibo_content(
+        self,
+        raw: dict,
+        hotspot_id: Optional[int] = None,
+        hotspot_keyword: Optional[str] = None,
+    ) -> StructuredContent:
+        """映射微博内容"""
+        return StructuredContent(
+            platform="wb",
+            content_id=str(raw.get("id", "")),
+            title=None,  # 微博没有标题
+            desc=None,
+            content_text=raw.get("content"),
+            user_id=str(raw.get("user_id", "")),
+            nickname=raw.get("nickname"),
+            avatar=raw.get("avatar"),
+            ip_location=raw.get("ip_location"),
+            liked_count=raw.get("liked_count"),
+            collected_count=None,
+            comment_count=raw.get("comments_count"),
+            share_count=raw.get("shared_count"),
+            view_count=None,
+            time=str(raw.get("create_time", "")) if raw.get("create_time") else None,
+            create_time=self._parse_datetime(raw.get("create_time")),
+            add_ts=raw.get("add_ts"),
+            last_modify_ts=raw.get("last_modify_ts"),
+            hotspot_id=hotspot_id or raw.get("hotspot_id"),
+            hotspot_keyword=hotspot_keyword or raw.get("hotspot_keyword"),
+            platform_specific={
+                "note_id": raw.get("note_id"),
+                "gender": raw.get("gender"),
+                "profile_url": raw.get("profile_url"),
+                "create_date_time": raw.get("create_date_time"),
+                "note_url": raw.get("note_url"),
+                "image_list": raw.get("image_list"),
+                "video_url": raw.get("video_url"),
+                "source_keyword": raw.get("source_keyword"),
+            },
+            comments=raw.get("comments", []),
+        )
+
+    def _map_weibo_comment(self, raw: dict) -> StructuredComment:
+        """映射微博评论"""
+        return StructuredComment(
+            platform="wb",
+            comment_id=str(raw.get("comment_id", "")),
+            content=raw.get("content"),
+            user_id=str(raw.get("user_id", "")),
+            nickname=raw.get("nickname"),
+            avatar=raw.get("avatar"),
+            ip_location=raw.get("ip_location"),
+            liked_count=raw.get("like_count"),
+            sub_comment_count=raw.get("sub_comment_count"),
+            create_time=self._parse_datetime(raw.get("create_time")),
+            add_ts=raw.get("add_ts"),
+            last_modify_ts=raw.get("last_modify_ts"),
+            platform_specific={
+                "note_id": raw.get("note_id"),
+                "gender": raw.get("gender"),
+                "profile_url": raw.get("profile_url"),
+                "create_date_time": raw.get("create_date_time"),
+                "parent_comment_id": raw.get("parent_comment_id"),
+            },
+        )
+
+    # ========== 贴吧映射 ==========
+    def _map_tieba_content(
+        self,
+        raw: dict,
+        hotspot_id: Optional[int] = None,
+        hotspot_keyword: Optional[str] = None,
+    ) -> StructuredContent:
+        """映射贴吧内容"""
+        return StructuredContent(
+            platform="tieba",
+            content_id=str(raw.get("id", "")),
+            title=raw.get("title"),
+            desc=raw.get("desc"),
+            content_text=raw.get("desc"),
+            user_id=None,
+            nickname=raw.get("user_nickname"),
+            avatar=raw.get("user_avatar"),
+            ip_location=raw.get("ip_location"),
+            liked_count=None,
+            collected_count=None,
+            comment_count=raw.get("total_replay_num"),
+            share_count=None,
+            view_count=None,
+            time=raw.get("publish_time"),
+            create_time=None,  # 贴吧的 publish_time 是字符串格式
+            add_ts=raw.get("add_ts"),
+            last_modify_ts=raw.get("last_modify_ts"),
+            hotspot_id=hotspot_id or raw.get("hotspot_id"),
+            hotspot_keyword=hotspot_keyword or raw.get("hotspot_keyword"),
+            platform_specific={
+                "note_id": raw.get("note_id"),
+                "note_url": raw.get("note_url"),
+                "user_link": raw.get("user_link"),
+                "tieba_id": raw.get("tieba_id"),
+                "tieba_name": raw.get("tieba_name"),
+                "tieba_link": raw.get("tieba_link"),
+                "total_replay_page": raw.get("total_replay_page"),
+                "source_keyword": raw.get("source_keyword"),
+            },
+            comments=raw.get("comments", []),
+        )
+
+    def _map_tieba_comment(self, raw: dict) -> StructuredComment:
+        """映射贴吧评论"""
+        return StructuredComment(
+            platform="tieba",
+            comment_id=str(raw.get("comment_id", "")),
+            content=raw.get("content"),
+            user_id=None,
+            nickname=raw.get("user_nickname"),
+            avatar=raw.get("user_avatar"),
+            ip_location=raw.get("ip_location"),
+            liked_count=None,
+            sub_comment_count=raw.get("sub_comment_count"),
+            create_time=None,  # 贴吧的 publish_time 是字符串格式
+            add_ts=raw.get("add_ts"),
+            last_modify_ts=raw.get("last_modify_ts"),
+            platform_specific={
+                "note_id": raw.get("note_id"),
+                "note_url": raw.get("note_url"),
+                "parent_comment_id": raw.get("parent_comment_id"),
+                "user_link": raw.get("user_link"),
+                "tieba_id": raw.get("tieba_id"),
+                "tieba_name": raw.get("tieba_name"),
+                "tieba_link": raw.get("tieba_link"),
+                "publish_time": raw.get("publish_time"),
+            },
+        )
+
+    # ========== 知乎映射 ==========
+    def _map_zhihu_content(
+        self,
+        raw: dict,
+        hotspot_id: Optional[int] = None,
+        hotspot_keyword: Optional[str] = None,
+    ) -> StructuredContent:
+        """映射知乎内容"""
+        return StructuredContent(
+            platform="zhihu",
+            content_id=str(raw.get("id", "")),
+            title=raw.get("title"),
+            desc=raw.get("desc"),
+            content_text=raw.get("content_text"),
+            user_id=str(raw.get("user_id", "")),
+            nickname=raw.get("user_nickname"),
+            avatar=raw.get("user_avatar"),
+            ip_location=None,
+            liked_count=raw.get("voteup_count"),
+            collected_count=None,
+            comment_count=raw.get("comment_count"),
+            share_count=None,
+            view_count=None,
+            time=raw.get("created_time"),
+            create_time=None,  # 知乎的时间是字符串格式
+            add_ts=raw.get("add_ts"),
+            last_modify_ts=raw.get("last_modify_ts"),
+            hotspot_id=hotspot_id or raw.get("hotspot_id"),
+            hotspot_keyword=hotspot_keyword or raw.get("hotspot_keyword"),
+            platform_specific={
+                "content_id": raw.get("content_id"),
+                "content_type": raw.get("content_type"),
+                "content_url": raw.get("content_url"),
+                "question_id": raw.get("question_id"),
+                "updated_time": raw.get("updated_time"),
+                "source_keyword": raw.get("source_keyword"),
+                "user_link": raw.get("user_link"),
+                "user_url_token": raw.get("user_url_token"),
+            },
+            comments=raw.get("comments", []),
+        )
+
+    def _map_zhihu_comment(self, raw: dict) -> StructuredComment:
+        """映射知乎评论"""
+        return StructuredComment(
+            platform="zhihu",
+            comment_id=str(raw.get("comment_id", "")),
+            content=raw.get("content"),
+            user_id=str(raw.get("user_id", "")),
+            nickname=raw.get("user_nickname"),
+            avatar=raw.get("user_avatar"),
+            ip_location=raw.get("ip_location"),
+            liked_count=raw.get("like_count"),
+            sub_comment_count=raw.get("sub_comment_count"),
+            create_time=None,  # 知乎的时间是字符串格式
+            add_ts=raw.get("add_ts"),
+            last_modify_ts=raw.get("last_modify_ts"),
+            platform_specific={
+                "content_id": raw.get("content_id"),
+                "content_type": raw.get("content_type"),
+                "parent_comment_id": raw.get("parent_comment_id"),
+                "publish_time": raw.get("publish_time"),
+                "dislike_count": raw.get("dislike_count"),
+                "user_link": raw.get("user_link"),
+            },
+        )
+
+    # ========== 统一映射入口 ==========
     def _map_raw_to_structured_content(
         self,
         raw_dict: dict,
@@ -88,7 +518,7 @@ class ContentService:
         hotspot_keyword: Optional[str] = None,
     ) -> StructuredContent:
         """
-        将原始数据库记录转换为结构化内容模型
+        将原始数据库记录转换为结构化内容模型（统一入口）
 
         Args:
             raw_dict: 原始数据库记录
@@ -99,109 +529,36 @@ class ContentService:
         Returns:
             结构化内容对象
         """
-        # content_id 使用数据库主键 id，而不是平台特定的字段
-        content_id = raw_dict.get("id", "")
+        mapper = {
+            "xhs": self._map_xhs_content,
+            "dy": self._map_douyin_content,
+            "bili": self._map_bilibili_content,
+            "ks": self._map_kuaishou_content,
+            "wb": self._map_weibo_content,
+            "tieba": self._map_tieba_content,
+            "zhihu": self._map_zhihu_content,
+        }.get(platform)
 
-        # 提取公共字段
-        time_value = self._get_field_value(raw_dict, "time")
-        # 将时间戳转换为字符串（如果是整数）
-        if isinstance(time_value, int):
-            time_value = str(time_value)
-        
-        common_fields = {
-            "platform": platform,
-            "content_id": str(content_id),
-            "title": self._get_field_value(raw_dict, "title"),
-            "desc": self._get_field_value(raw_dict, "desc"),
-            "content_text": self._get_field_value(raw_dict, "content_text"),
-            "user_id": str(self._get_field_value(raw_dict, "user_id") or ""),
-            "nickname": self._get_field_value(raw_dict, "nickname"),
-            "avatar": self._get_field_value(raw_dict, "avatar"),
-            "ip_location": self._get_field_value(raw_dict, "ip_location"),
-            "liked_count": self._get_field_value(raw_dict, "liked_count"),
-            "collected_count": self._get_field_value(raw_dict, "collected_count"),
-            "comment_count": self._get_field_value(raw_dict, "comment_count"),
-            "share_count": self._get_field_value(raw_dict, "share_count"),
-            "view_count": self._get_field_value(raw_dict, "view_count"),
-            "time": time_value,
-            "create_time": self._parse_datetime(
-                self._get_field_value(raw_dict, "create_time")
-            ),
-            "add_ts": self._get_field_value(raw_dict, "add_ts"),
-            "last_modify_ts": self._get_field_value(raw_dict, "last_modify_ts"),
-            "hotspot_id": hotspot_id or raw_dict.get("hotspot_id"),
-            "hotspot_keyword": hotspot_keyword or raw_dict.get("hotspot_keyword"),
-        }
-
-        # 标准字段列表
-        standard_fields = {
-            "id",  # 数据库主键
-            # 平台特定的内容ID字段
-            "note_id",
-            "aweme_id",
-            "video_id",
-            "content_id",
-            # 其他标准字段
-            "title",
-            "desc",
-            "content",
-            "note_card_content",
-            "content_text",
-            "user_id",
-            "nickname",
-            "author_name",
-            "avatar",
-            "user_avatar",
-            "ip_location",
-            "liked_count",
-            "like_count",
-            "digg_count",
-            "collected_count",
-            "collect_count",
-            "favorite_count",
-            "comment_count",
-            "comments_count",
-            "share_count",
-            "view_count",
-            "play_count",
-            "time",
-            "create_time",
-            "created_time",
-            "add_ts",
-            "last_modify_ts",
-            "hotspot_id",
-            "hotspot_keyword",
-            "comments",  # 不放入 platform_specific
-        }
-
-        # 提取平台特有字段
-        platform_specific = {}
-        for key, value in raw_dict.items():
-            if key not in standard_fields:
-                # 转换 datetime 为字符串
-                if isinstance(value, datetime):
-                    platform_specific[key] = value.isoformat()
-                else:
-                    platform_specific[key] = value
-
-        common_fields["platform_specific"] = platform_specific
+        if not mapper:
+            raise ValueError(f"不支持的平台: {platform}")
 
         # 处理嵌套的评论
-        comments = []
-        if "comments" in raw_dict and isinstance(raw_dict["comments"], list):
-            for comment_raw in raw_dict["comments"]:
-                comments.append(
-                    self._map_raw_to_structured_comment(comment_raw, platform)
-                )
-        common_fields["comments"] = comments
+        comments_raw = raw_dict.pop("comments", [])
+        structured_content = mapper(raw_dict, hotspot_id, hotspot_keyword)
 
-        return StructuredContent(**common_fields)
+        # 映射评论
+        if comments_raw:
+            structured_content.comments = [
+                self._map_raw_to_structured_comment(c, platform) for c in comments_raw
+            ]
+
+        return structured_content
 
     def _map_raw_to_structured_comment(
         self, raw_dict: dict, platform: str
     ) -> StructuredComment:
         """
-        将原始数据库记录转换为结构化评论模型
+        将原始数据库记录转换为结构化评论模型（统一入口）
 
         Args:
             raw_dict: 原始数据库记录
@@ -210,61 +567,20 @@ class ContentService:
         Returns:
             结构化评论对象
         """
-        # 评论ID字段可能是 comment_id 或 id
-        comment_id = raw_dict.get("comment_id") or raw_dict.get("id") or ""
+        mapper = {
+            "xhs": self._map_xhs_comment,
+            "dy": self._map_douyin_comment,
+            "bili": self._map_bilibili_comment,
+            "ks": self._map_kuaishou_comment,
+            "wb": self._map_weibo_comment,
+            "tieba": self._map_tieba_comment,
+            "zhihu": self._map_zhihu_comment,
+        }.get(platform)
 
-        # 提取公共字段
-        common_fields = {
-            "platform": platform,
-            "comment_id": str(comment_id),
-            "content": self._get_field_value(raw_dict, "comment_content"),
-            "user_id": str(self._get_field_value(raw_dict, "user_id") or ""),
-            "nickname": self._get_field_value(raw_dict, "nickname"),
-            "avatar": self._get_field_value(raw_dict, "avatar"),
-            "ip_location": self._get_field_value(raw_dict, "ip_location"),
-            "liked_count": self._get_field_value(raw_dict, "liked_count"),
-            "sub_comment_count": self._get_field_value(raw_dict, "sub_comment_count"),
-            "create_time": self._parse_datetime(
-                self._get_field_value(raw_dict, "create_time")
-            ),
-            "add_ts": self._get_field_value(raw_dict, "add_ts"),
-            "last_modify_ts": self._get_field_value(raw_dict, "last_modify_ts"),
-        }
+        if not mapper:
+            raise ValueError(f"不支持的平台: {platform}")
 
-        # 标准字段列表
-        standard_fields = {
-            "comment_id",
-            "id",
-            "content",
-            "comment_content",
-            "user_id",
-            "nickname",
-            "author_name",
-            "avatar",
-            "user_avatar",
-            "ip_location",
-            "liked_count",
-            "like_count",
-            "sub_comment_count",
-            "create_time",
-            "created_time",
-            "add_ts",
-            "last_modify_ts",
-        }
-
-        # 提取平台特有字段
-        platform_specific = {}
-        for key, value in raw_dict.items():
-            if key not in standard_fields:
-                # 转换 datetime 为字符串
-                if isinstance(value, datetime):
-                    platform_specific[key] = value.isoformat()
-                else:
-                    platform_specific[key] = value
-
-        common_fields["platform_specific"] = platform_specific
-
-        return StructuredComment(**common_fields)
+        return mapper(raw_dict)
 
     async def get_contents_by_hotspot_id(
         self, hotspot_id: int, hotspot_keyword: str, conn: aiomysql.Connection
