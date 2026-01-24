@@ -53,6 +53,25 @@ class ContentService:
         hotspot_keyword: Optional[str] = None,
     ) -> StructuredContent:
         """映射小红书内容"""
+        # 处理 last_update_time - 转换为字符串
+        last_update_time = raw.get("last_update_time")
+        if last_update_time is not None and not isinstance(last_update_time, str):
+            last_update_time = str(last_update_time)
+
+        # 处理 image_list - 如果是字符串则分割为列表
+        image_list = raw.get("image_list")
+        if isinstance(image_list, str):
+            image_list = [img.strip() for img in image_list.split(',') if img.strip()]
+        elif image_list is None:
+            image_list = None
+
+        # 处理 tag_list - 如果是字符串则分割为列表
+        tag_list = raw.get("tag_list")
+        if isinstance(tag_list, str):
+            tag_list = [tag.strip() for tag in tag_list.split(',') if tag.strip()]
+        elif tag_list is None:
+            tag_list = None
+
         return StructuredContent(
             id=raw.get("id"),
             title=raw.get("title"),
@@ -73,9 +92,9 @@ class ContentService:
             note_id=raw.get("note_id"),
             type=raw.get("type"),
             video_url=raw.get("video_url"),
-            last_update_time=raw.get("last_update_time"),
-            image_list=raw.get("image_list"),
-            tag_list=raw.get("tag_list"),
+            last_update_time=last_update_time,
+            image_list=image_list,
+            tag_list=tag_list,
             note_url=raw.get("note_url"),
             source_keyword=raw.get("source_keyword"),
             comments=raw.get("comments", []),
