@@ -511,6 +511,7 @@ class GetHotspotContentsResponse(BaseModel):
     """获取热点关联内容响应"""
 
     success: bool
+    message: str = Field(default="获取热点内容成功", description="响应消息")
     hotspot_id: int
     hotspot_keyword: str
     platforms: List[PlatformContents] = Field(..., description="各平台的完整内容和评论")

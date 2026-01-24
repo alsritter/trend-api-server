@@ -616,6 +616,7 @@ async def get_hotspot_contents(
 
         return GetHotspotContentsResponse(
             success=True,
+            message="获取热点内容成功",
             hotspot_id=hotspot_id,
             hotspot_keyword=keyword,
             platforms=platforms_data,
