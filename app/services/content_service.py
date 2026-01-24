@@ -11,6 +11,7 @@ from app.constants import (
     PLATFORM_CONTENT_ID_FIELDS,
 )
 from datetime import datetime
+import re
 
 
 class ContentService:
@@ -19,6 +20,55 @@ class ContentService:
     def __init__(self):
         """初始化内容服务"""
         pass
+
+    def _parse_chinese_number(self, value: Any) -> Optional[int]:
+        """
+        解析中文数字格式（如 '13.5万'）转换为整数
+
+        Args:
+            value: 可能是整数、中文格式字符串或 None
+
+        Returns:
+            整数或 None
+        """
+        if value is None:
+            return None
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        if not isinstance(value, str):
+            return None
+
+        # 去除空白字符
+        value = value.strip()
+        if not value:
+            return None
+
+        try:
+            # 如果是纯数字字符串，直接转换
+            return int(value)
+        except ValueError:
+            pass
+
+        # 处理中文数字格式
+        # 匹配模式: 数字 + 万/亿/w
+        match = re.match(r'^([\d.]+)\s*([万亿wWkK])$', value)
+        if match:
+            num_str, unit = match.groups()
+            try:
+                num = float(num_str)
+                # 根据单位转换
+                if unit in ['万', 'w', 'W']:
+                    return int(num * 10000)
+                elif unit in ['亿']:
+                    return int(num * 100000000)
+                elif unit in ['k', 'K']:
+                    return int(num * 1000)
+            except (ValueError, OverflowError):
+                return None
+
+        return None
 
     def _parse_datetime(self, value: Any) -> Optional[datetime]:
         """
@@ -80,10 +130,10 @@ class ContentService:
             nickname=raw.get("nickname"),
             avatar=raw.get("avatar"),
             ip_location=raw.get("ip_location", ""),
-            liked_count=raw.get("liked_count"),
-            collected_count=raw.get("collected_count"),
-            comment_count=raw.get("comment_count"),
-            share_count=raw.get("share_count"),
+            liked_count=self._parse_chinese_number(raw.get("liked_count")),
+            collected_count=self._parse_chinese_number(raw.get("collected_count")),
+            comment_count=self._parse_chinese_number(raw.get("comment_count")),
+            share_count=self._parse_chinese_number(raw.get("share_count")),
             time=str(raw.get("time", "")) if raw.get("time") else None,
             add_ts=raw.get("add_ts"),
             last_modify_ts=raw.get("last_modify_ts"),
@@ -102,6 +152,16 @@ class ContentService:
 
     def _map_xhs_comment(self, raw: dict) -> StructuredComment:
         """映射小红书评论"""
+        # 处理 pictures - 如果是空字符串或字符串则转换为列表
+        pictures = raw.get("pictures")
+        if isinstance(pictures, str):
+            if pictures.strip():
+                pictures = [pic.strip() for pic in pictures.split(',') if pic.strip()]
+            else:
+                pictures = None
+        elif pictures is None:
+            pictures = None
+
         return StructuredComment(
             id=raw.get("id"),
             comment_id=str(raw.get("comment_id", "")) if raw.get("comment_id") else None,
@@ -110,14 +170,14 @@ class ContentService:
             nickname=raw.get("nickname"),
             avatar=raw.get("avatar"),
             ip_location=raw.get("ip_location", ""),
-            like_count=raw.get("like_count"),
-            sub_comment_count=raw.get("sub_comment_count"),
+            like_count=self._parse_chinese_number(raw.get("like_count")),
+            sub_comment_count=self._parse_chinese_number(raw.get("sub_comment_count")),
             create_time=str(raw.get("create_time")) if raw.get("create_time") else None,
             add_ts=raw.get("add_ts"),
             last_modify_ts=raw.get("last_modify_ts"),
             # 小红书特有字段
             note_id=raw.get("note_id"),
-            pictures=raw.get("pictures"),
+            pictures=pictures,
             parent_comment_id=raw.get("parent_comment_id"),
             note_url=raw.get("note_url"),
             target_comment_id=raw.get("target_comment_id"),
@@ -165,6 +225,16 @@ class ContentService:
 
     def _map_douyin_comment(self, raw: dict) -> StructuredComment:
         """映射抖音评论"""
+        # 处理 pictures - 如果是空字符串或字符串则转换为列表
+        pictures = raw.get("pictures")
+        if isinstance(pictures, str):
+            if pictures.strip():
+                pictures = [pic.strip() for pic in pictures.split(',') if pic.strip()]
+            else:
+                pictures = None
+        elif pictures is None:
+            pictures = None
+
         return StructuredComment(
             id=raw.get("id"),
             comment_id=str(raw.get("comment_id", "")) if raw.get("comment_id") else None,
@@ -185,7 +255,7 @@ class ContentService:
             user_unique_id=raw.get("user_unique_id"),
             user_signature=raw.get("user_signature"),
             parent_comment_id=raw.get("parent_comment_id"),
-            pictures=raw.get("pictures"),
+            pictures=pictures,
             reply_to_reply_id=raw.get("reply_to_reply_id"),
             hotspot_id=raw.get("hotspot_id"),
         )
@@ -312,6 +382,16 @@ class ContentService:
         hotspot_keyword: Optional[str] = None,
     ) -> StructuredContent:
         """映射微博内容"""
+        # 处理 image_list - 如果是字符串则分割为列表
+        image_list = raw.get("image_list")
+        if isinstance(image_list, str):
+            if image_list.strip():
+                image_list = [img.strip() for img in image_list.split(',') if img.strip()]
+            else:
+                image_list = None
+        elif image_list is None:
+            image_list = None
+
         return StructuredContent(
             id=raw.get("id"),
             title=raw.get("title"),  # 微博没有标题
@@ -335,7 +415,7 @@ class ContentService:
             profile_url=raw.get("profile_url"),
             create_date_time=raw.get("create_date_time"),
             note_url=raw.get("note_url"),
-            image_list=raw.get("image_list"),
+            image_list=image_list,
             video_url=raw.get("video_url"),
             shared_count=raw.get("shared_count"),
             source_keyword=raw.get("source_keyword"),
