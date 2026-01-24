@@ -53,17 +53,17 @@ class ContentService:
 
         # 处理中文数字格式
         # 匹配模式: 数字 + 万/亿/w
-        match = re.match(r'^([\d.]+)\s*([万亿wWkK])$', value)
+        match = re.match(r"^([\d.]+)\s*([万亿wWkK])$", value)
         if match:
             num_str, unit = match.groups()
             try:
                 num = float(num_str)
                 # 根据单位转换
-                if unit in ['万', 'w', 'W']:
+                if unit in ["万", "w", "W"]:
                     return int(num * 10000)
-                elif unit in ['亿']:
+                elif unit in ["亿"]:
                     return int(num * 100000000)
-                elif unit in ['k', 'K']:
+                elif unit in ["k", "K"]:
                     return int(num * 1000)
             except (ValueError, OverflowError):
                 return None
@@ -111,14 +111,14 @@ class ContentService:
         # 处理 image_list - 如果是字符串则分割为列表
         image_list = raw.get("image_list")
         if isinstance(image_list, str):
-            image_list = [img.strip() for img in image_list.split(',') if img.strip()]
+            image_list = [img.strip() for img in image_list.split(",") if img.strip()]
         elif image_list is None:
             image_list = None
 
         # 处理 tag_list - 如果是字符串则分割为列表
         tag_list = raw.get("tag_list")
         if isinstance(tag_list, str):
-            tag_list = [tag.strip() for tag in tag_list.split(',') if tag.strip()]
+            tag_list = [tag.strip() for tag in tag_list.split(",") if tag.strip()]
         elif tag_list is None:
             tag_list = None
 
@@ -156,7 +156,7 @@ class ContentService:
         pictures = raw.get("pictures")
         if isinstance(pictures, str):
             if pictures.strip():
-                pictures = [pic.strip() for pic in pictures.split(',') if pic.strip()]
+                pictures = [pic.strip() for pic in pictures.split(",") if pic.strip()]
             else:
                 pictures = None
         elif pictures is None:
@@ -164,7 +164,9 @@ class ContentService:
 
         return StructuredComment(
             id=raw.get("id"),
-            comment_id=str(raw.get("comment_id", "")) if raw.get("comment_id") else None,
+            comment_id=str(raw.get("comment_id", ""))
+            if raw.get("comment_id")
+            else None,
             content=raw.get("content"),
             user_id=str(raw.get("user_id", "")) if raw.get("user_id") else None,
             nickname=raw.get("nickname"),
@@ -221,6 +223,8 @@ class ContentService:
             source_keyword=raw.get("source_keyword"),
             is_ai_generated=raw.get("is_ai_generated"),
             comments=raw.get("comments", []),
+            video_url=raw.get("video_download_url"),
+            image_list=[raw.get("cover_url")],
         )
 
     def _map_douyin_comment(self, raw: dict) -> StructuredComment:
@@ -229,15 +233,20 @@ class ContentService:
         pictures = raw.get("pictures")
         if isinstance(pictures, str):
             if pictures.strip():
-                pictures = [pic.strip() for pic in pictures.split(',') if pic.strip()]
+                pictures = [pic.strip() for pic in pictures.split(",") if pic.strip()]
             else:
                 pictures = None
         elif pictures is None:
             pictures = None
+            
+        # [raw.get("cover_url")]
+        
 
         return StructuredComment(
             id=raw.get("id"),
-            comment_id=str(raw.get("comment_id", "")) if raw.get("comment_id") else None,
+            comment_id=str(raw.get("comment_id", ""))
+            if raw.get("comment_id")
+            else None,
             content=raw.get("content"),
             user_id=str(raw.get("user_id", "")) if raw.get("user_id") else None,
             nickname=raw.get("nickname"),
@@ -301,7 +310,9 @@ class ContentService:
         """映射B站评论"""
         return StructuredComment(
             id=raw.get("id"),
-            comment_id=str(raw.get("comment_id", "")) if raw.get("comment_id") else None,
+            comment_id=str(raw.get("comment_id", ""))
+            if raw.get("comment_id")
+            else None,
             content=raw.get("content"),
             user_id=str(raw.get("user_id", "")) if raw.get("user_id") else None,
             nickname=raw.get("nickname"),
@@ -357,7 +368,9 @@ class ContentService:
         """映射快手评论"""
         return StructuredComment(
             id=raw.get("id"),
-            comment_id=str(raw.get("comment_id", "")) if raw.get("comment_id") else None,
+            comment_id=str(raw.get("comment_id", ""))
+            if raw.get("comment_id")
+            else None,
             content=raw.get("content"),
             user_id=str(raw.get("user_id", "")) if raw.get("user_id") else None,
             nickname=raw.get("nickname"),
@@ -386,7 +399,9 @@ class ContentService:
         image_list = raw.get("image_list")
         if isinstance(image_list, str):
             if image_list.strip():
-                image_list = [img.strip() for img in image_list.split(',') if img.strip()]
+                image_list = [
+                    img.strip() for img in image_list.split(",") if img.strip()
+                ]
             else:
                 image_list = None
         elif image_list is None:
@@ -426,7 +441,9 @@ class ContentService:
         """映射微博评论"""
         return StructuredComment(
             id=raw.get("id"),
-            comment_id=str(raw.get("comment_id", "")) if raw.get("comment_id") else None,
+            comment_id=str(raw.get("comment_id", ""))
+            if raw.get("comment_id")
+            else None,
             content=raw.get("content"),
             user_id=str(raw.get("user_id", "")) if raw.get("user_id") else None,
             nickname=raw.get("nickname"),
@@ -490,7 +507,9 @@ class ContentService:
         """映射贴吧评论"""
         return StructuredComment(
             id=raw.get("id"),
-            comment_id=str(raw.get("comment_id", "")) if raw.get("comment_id") else None,
+            comment_id=str(raw.get("comment_id", ""))
+            if raw.get("comment_id")
+            else None,
             content=raw.get("content"),
             user_id=raw.get("user_id"),
             nickname=raw.get("user_nickname"),
@@ -556,7 +575,9 @@ class ContentService:
         """映射知乎评论"""
         return StructuredComment(
             id=raw.get("id"),
-            comment_id=str(raw.get("comment_id", "")) if raw.get("comment_id") else None,
+            comment_id=str(raw.get("comment_id", ""))
+            if raw.get("comment_id")
+            else None,
             content=raw.get("content"),
             user_id=str(raw.get("user_id", "")) if raw.get("user_id") else None,
             nickname=raw.get("user_nickname"),
