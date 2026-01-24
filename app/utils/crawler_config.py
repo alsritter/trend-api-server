@@ -107,6 +107,8 @@ def merge_task_config(task_params: Dict) -> Dict[str, str]:
         "publish_time_type": "PUBLISH_TIME_TYPE",
         "save_data_option": "SAVE_DATA_OPTION",
         "start_page": "START_PAGE",
+        "max_notes_count": "CRAWLER_MAX_NOTES_COUNT",
+        "max_comments_count": "PER_NOTE_MAX_COMMENTS_COUNT",
         "max_notes": "CRAWLER_MAX_NOTES_COUNT",
         "max_concurrency": "MAX_CONCURRENCY_NUM",
         "time_sleep": "CRAWLER_TIME_SLEEP",

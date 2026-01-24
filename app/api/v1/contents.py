@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Optional
 import aiomysql
-from app.schemas.content import ContentListResponse, CommentListResponse
+from app.schemas.content import ContentListResponse, CommentListResponse, StructuredContent, StructuredComment
 from app.schemas.common import APIResponse
 from app.dependencies import get_db
 from app.db.session import get_vector_db
+from app.services.content_service import content_service
 from app.constants import (
     PLATFORM_CONTENT_TABLES,
     PLATFORM_COMMENT_TABLES,
@@ -31,10 +32,12 @@ async def list_contents(
     pg_conn: asyncpg.Connection = Depends(get_vector_db),
 ):
     """
-    查询平台内容列表（笔记/视频）
+    查询平台内容列表（笔记/视频）- 返回结构化数据
 
     支持的平台: xhs, dy, ks, bili, wb, tieba, zhihu
     支持按热词ID过滤，返回该热词关联的所有内容
+
+    返回结构化内容模型，统一不同平台的字段
     """
 
     if platform not in PLATFORM_CONTENT_TABLES:
@@ -46,96 +49,58 @@ async def list_contents(
                 status_code=400, detail=f"Unsupported platform: {platform}"
             )
 
-    table_name = PLATFORM_CONTENT_TABLES[platform]
-    time_field = PLATFORM_TIME_FIELDS[platform]
-
     try:
-        # 如果提供了 hotspot_id，验证热词是否存在
+        # 如果提供了 hotspot_id，验证热词是否存在并获取关键词
+        hotspot_keyword = None
         if hotspot_id:
             hotspot_result = await pg_conn.fetchrow(
                 "SELECT id, keyword FROM hotspots WHERE id = $1", hotspot_id
             )
             if not hotspot_result:
                 raise HTTPException(status_code=404, detail=f"热词 {hotspot_id} 不存在")
+            hotspot_keyword = hotspot_result["keyword"]
 
-        # 从 MySQL 查询内容数据
-        async with mysql_conn.cursor(aiomysql.DictCursor) as cursor:
-            # 构建查询条件
-            where_clauses = []
-            params = []
+        # 使用 ContentService 获取结构化内容
+        filters = {
+            "hotspot_id": hotspot_id,
+            "keyword": keyword,
+            "start_date": start_date,
+            "end_date": end_date,
+        }
 
-            # 热词ID过滤 - 直接使用 hotspot_id 字段
-            if hotspot_id:
-                where_clauses.append("hotspot_id = %s")
-                params.append(hotspot_id)
+        structured_contents, total = await content_service.get_contents_by_platform(
+            platform, filters, page, page_size, mysql_conn
+        )
 
-            # 关键词搜索
-            if keyword:
-                where_clauses.append(
-                    "(title LIKE %s OR `desc` LIKE %s OR content LIKE %s)"
-                )
-                keyword_pattern = f"%{keyword}%"
-                params.extend([keyword_pattern, keyword_pattern, keyword_pattern])
+        # 批量查询热词信息（为没有 hotspot_keyword 的内容补充）
+        hotspot_ids = set()
+        for content in structured_contents:
+            if content.hotspot_id and not content.hotspot_keyword:
+                hotspot_ids.add(content.hotspot_id)
 
-            # 时间范围过滤
-            if start_date:
-                where_clauses.append(f"{time_field} >= %s")
-                params.append(f"{start_date} 00:00:00")
-
-            if end_date:
-                where_clauses.append(f"{time_field} <= %s")
-                params.append(f"{end_date} 23:59:59")
-
-            where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
-
-            # 查询总数
-            count_sql = f"SELECT COUNT(*) as total FROM {table_name} WHERE {where_sql}"
-            await cursor.execute(count_sql, params)
-            total_result = await cursor.fetchone()
-            total = total_result["total"]
-
-            # 查询数据
-            offset = (page - 1) * page_size
-            data_sql = f"""
-                SELECT * FROM {table_name}
-                WHERE {where_sql}
-                ORDER BY {time_field} DESC
-                LIMIT %s OFFSET %s
-            """
-            await cursor.execute(data_sql, params + [page_size, offset])
-            items = await cursor.fetchall()
-
-            # 如果结果中有 hotspot_id，从 PostgreSQL 获取对应的关键词信息
-            hotspot_ids = set()
-            for item in items:
-                hid = item.get("hotspot_id")
-                if hid is not None and hid != "":
-                    # 确保转换为整数类型
-                    hotspot_ids.add(int(hid) if isinstance(hid, str) else hid)
-
-            # 批量查询热词信息
-            hotspot_map = {}
-            if hotspot_ids:
-                hotspots = await pg_conn.fetch(
-                    "SELECT id, keyword FROM hotspots WHERE id = ANY($1::int[])",
-                    list(hotspot_ids),
-                )
-                hotspot_map = {h["id"]: h["keyword"] for h in hotspots}
-
-            # 为每个 item 添加 hotspot_keyword
-            for item in items:
-                hid = item.get("hotspot_id")
-                item["hotspot_keyword"] = (
-                    hotspot_map.get(int(hid)) if hid and hid != "" else None
-                )
-
-            return APIResponse(
-                code=0,
-                message="success",
-                data=ContentListResponse(
-                    total=total, page=page, page_size=page_size, items=items
-                ),
+        hotspot_map = {}
+        if hotspot_ids:
+            hotspots = await pg_conn.fetch(
+                "SELECT id, keyword FROM hotspots WHERE id = ANY($1::int[])",
+                list(hotspot_ids),
             )
+            hotspot_map = {h["id"]: h["keyword"] for h in hotspots}
+
+        # 补充 hotspot_keyword
+        for content in structured_contents:
+            if content.hotspot_id and not content.hotspot_keyword:
+                content.hotspot_keyword = hotspot_map.get(content.hotspot_id)
+
+        # 转换为字典以保持兼容性
+        items = [content.model_dump() for content in structured_contents]
+
+        return APIResponse(
+            code=0,
+            message="success",
+            data=ContentListResponse(
+                total=total, page=page, page_size=page_size, items=items
+            ),
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -211,7 +176,7 @@ async def list_comments(
     conn: aiomysql.Connection = Depends(get_db),
 ):
     """
-    查询评论列表
+    查询评论列表（返回结构化数据）
 
     支持的平台: xhs, dy, ks, bili, wb, tieba, zhihu
 
@@ -220,7 +185,9 @@ async def list_comments(
     - bili(B站): video_id
     - ks(快手): video_id
     - zhihu(知乎): content_id
-    - 其他平台: note_id
+    - 其他平���: note_id
+
+    返回结构化评论模型，统一不同平台的字段
     """
     if platform not in PLATFORM_COMMENT_TABLES:
         # 有可能是中文平台名，转换成代码
@@ -231,37 +198,22 @@ async def list_comments(
                 status_code=400, detail=f"Unsupported platform: {platform}"
             )
 
-    table_name = PLATFORM_COMMENT_TABLES[platform]
-
-    # 根据平台确定关联字段名
-    content_id_field = PLATFORM_CONTENT_ID_FIELDS.get(platform, "note_id")
-
     try:
-        async with conn.cursor(aiomysql.DictCursor) as cursor:
-            # 查询总数
-            count_sql = f"SELECT COUNT(*) as total FROM {table_name} WHERE {content_id_field} = %s"
-            await cursor.execute(count_sql, (note_id,))
-            total_result = await cursor.fetchone()
-            total = total_result["total"]
+        # 使用 ContentService 获取结构化评论
+        structured_comments, total = await content_service.get_comments_by_note_id(
+            platform, note_id, page, page_size, conn
+        )
 
-            # 查询数据
-            offset = (page - 1) * page_size
-            data_sql = f"""
-                SELECT * FROM {table_name}
-                WHERE {content_id_field} = %s
-                ORDER BY add_ts DESC
-                LIMIT %s OFFSET %s
-            """
-            await cursor.execute(data_sql, (note_id, page_size, offset))
-            items = await cursor.fetchall()
+        # 转换为字典以保持兼容性
+        items = [comment.model_dump() for comment in structured_comments]
 
-            return APIResponse(
-                code=0,
-                message="success",
-                data=CommentListResponse(
-                    total=total, page=page, page_size=page_size, items=items
-                ),
-            )
+        return APIResponse(
+            code=0,
+            message="success",
+            data=CommentListResponse(
+                total=total, page=page, page_size=page_size, items=items
+            ),
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to query comments: {str(e)}"

@@ -2,6 +2,7 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
 from enum import Enum
+from app.schemas.content import StructuredContent
 class HotspotStatus(str, Enum):
     """热点状态枚举"""
 
@@ -501,7 +502,7 @@ class PlatformContents(BaseModel):
     """平台内容详情"""
 
     platform: str
-    contents: List[dict] = Field(default_factory=list, description="内容列表")
+    contents: List[StructuredContent] = Field(default_factory=list, description="结构化内容列表")
     total_contents: int
     total_comments: int
 

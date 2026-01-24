@@ -4,13 +4,9 @@ import logging
 import traceback
 import aiomysql
 from app.services.hotspot_service import hotspot_service
+from app.services.content_service import content_service
 from app.db.session import get_db
 from app.db.task_repo import TaskRepository
-from app.constants import (
-    PLATFORM_CONTENT_TABLES,
-    PLATFORM_COMMENT_TABLES,
-    PLATFORM_CONTENT_ID_FIELDS,
-)
 from app.schemas.hotspot import (
     # 请求/响应模型
     AddHotspotKeywordRequest,
@@ -565,11 +561,11 @@ async def get_hotspot_contents(
     hotspot_id: int, conn: aiomysql.Connection = Depends(get_db)
 ):
     """
-    获取热点关联的所有内容和评论
+    获取热点关联的所有内容和评论（返回结构化数据）
 
     功能：
-    - 直接查询各平台内容表中 hotspot_id 匹配的所有内容
-    - 返回每个平台的完整内容列表和评论列表
+    - 查询各平台内容表中 hotspot_id 匹配的所有内容
+    - 返回每个平台的结构化内容列表（包含嵌套的评论）
     - 按平台分组展示数据
 
     参数：
@@ -577,12 +573,13 @@ async def get_hotspot_contents(
 
     返回：
     - 热点基本信息（ID、关键词）
-    - 各平台的内容和评论列表
+    - 各平台的结构化内容和评论列表
     - 统计信息（总内容数、总评论数）
 
     说明：
-    - 直接通过内容表中的 hotspot_id 字段查询内容
-    - 再根据内容ID查询对应的评论
+    - 使用 ContentService 进行数据查询和转换
+    - 返回 StructuredContent 模型，统一不同平台的字段
+    - 平台特有字段保存在 platform_specific 字段中
     """
     try:
         # 1. 获取热点信息
@@ -592,75 +589,30 @@ async def get_hotspot_contents(
 
         keyword = hotspot.keyword
 
-        # 2. 按平台分组获取内容和评论
+        # 2. 使用 ContentService 获取所有平台的内容
+        contents_by_platform = await content_service.get_contents_by_hotspot_id(
+            hotspot_id, keyword, conn
+        )
+
+        # 3. 转换为响应格式
         platforms_data = []
         total_contents_count = 0
         total_comments_count = 0
 
-        async with conn.cursor(aiomysql.DictCursor) as cursor:
-            for platform, content_table in PLATFORM_CONTENT_TABLES.items():
-                comment_table = PLATFORM_COMMENT_TABLES[platform]
-                content_id_field = PLATFORM_CONTENT_ID_FIELDS.get(platform, "note_id")
+        for platform, contents in contents_by_platform.items():
+            platform_contents_count = len(contents)
+            platform_comments_count = sum(len(c.comments) for c in contents)
+            total_contents_count += platform_contents_count
+            total_comments_count += platform_comments_count
 
-                # 直接查询该平台下 hotspot_id 匹配的所有内容
-                content_sql = f"""
-                    SELECT * FROM {content_table}
-                    WHERE hotspot_id = %s
-                    ORDER BY add_ts DESC
-                """
-                await cursor.execute(content_sql, (hotspot_id,))
-                contents = await cursor.fetchall()
-
-                # 如果该平台没有内容，跳过
-                if not contents:
-                    continue
-
-                # 查询这些内容的所有评论
-                comments = []
-                content_ids = [
-                    c.get(content_id_field) for c in contents if c.get(content_id_field)
-                ]
-
-                if content_ids:
-                    # 构建 IN 查询
-                    placeholders = ",".join(["%s"] * len(content_ids))
-                    comment_sql = f"""
-                        SELECT * FROM {comment_table}
-                        WHERE {content_id_field} IN ({placeholders})
-                        ORDER BY add_ts DESC
-                    """
-                    await cursor.execute(comment_sql, content_ids)
-                    comments = await cursor.fetchall()
-
-                # 将评论按 content_id 分组
-                comments_by_content = {}
-                for comment in comments:
-                    cid = comment.get(content_id_field)
-                    if cid:
-                        if cid not in comments_by_content:
-                            comments_by_content[cid] = []
-                        comments_by_content[cid].append(comment)
-
-                # 为每个内容添加其评论列表
-                for content in contents:
-                    cid = content.get(content_id_field)
-                    content["comments"] = comments_by_content.get(cid, [])
-
-                # 统计
-                platform_contents_count = len(contents)
-                platform_comments_count = len(comments)
-                total_contents_count += platform_contents_count
-                total_comments_count += platform_comments_count
-
-                # 添加到结果（注意：现在 comments 已经嵌套在 contents 中了）
-                platforms_data.append(
-                    PlatformContents(
-                        platform=platform,
-                        contents=contents,
-                        total_contents=platform_contents_count,
-                        total_comments=platform_comments_count,
-                    )
+            platforms_data.append(
+                PlatformContents(
+                    platform=platform,
+                    contents=contents,
+                    total_contents=platform_contents_count,
+                    total_comments=platform_comments_count,
                 )
+            )
 
         return GetHotspotContentsResponse(
             success=True,
