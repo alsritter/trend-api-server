@@ -103,6 +103,11 @@ class ContentService:
         content_id = raw_dict.get("id", "")
 
         # 提取公共字段
+        time_value = self._get_field_value(raw_dict, "time")
+        # 将时间戳转换为字符串（如果是整数）
+        if isinstance(time_value, int):
+            time_value = str(time_value)
+        
         common_fields = {
             "platform": platform,
             "content_id": str(content_id),
@@ -118,7 +123,7 @@ class ContentService:
             "comment_count": self._get_field_value(raw_dict, "comment_count"),
             "share_count": self._get_field_value(raw_dict, "share_count"),
             "view_count": self._get_field_value(raw_dict, "view_count"),
-            "time": self._get_field_value(raw_dict, "time"),
+            "time": time_value,
             "create_time": self._parse_datetime(
                 self._get_field_value(raw_dict, "create_time")
             ),
