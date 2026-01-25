@@ -113,6 +113,10 @@ class Settings(BaseSettings):
     # CORS 配置
     CORS_ORIGINS: List[str] = ["*"]
 
+    # 飞书配置
+    LARK_APP_ID: str = ""
+    LARK_APP_SECRET: str = ""
+
     # 日志配置
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = "/var/log/trend-api-server/app.log"

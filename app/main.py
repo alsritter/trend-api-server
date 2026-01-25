@@ -25,6 +25,7 @@ from app.api.v1 import (
     clusters,
     push,
     home_proxy,
+    lark_bitable,
 )
 
 # 全局任务控制
@@ -129,6 +130,7 @@ app.include_router(hotspots.router, prefix="/api/v1/hotspots", tags=["Hotspots"]
 app.include_router(clusters.router, prefix="/api/v1/clusters", tags=["Clusters"])
 app.include_router(push.router, prefix="/api/v1/push", tags=["Push"])
 app.include_router(home_proxy.router, prefix="/api/v1/home-proxy", tags=["Home Proxy Pool"])
+app.include_router(lark_bitable.router, prefix="/api/v1/lark", tags=["Lark Bitable"])
 
 
 # 静态文件目录配置

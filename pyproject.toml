@@ -28,8 +28,12 @@ dependencies = [
     "loguru==0.7.2",
     "aiofiles==23.2.1",
     "requests==2.31.0",
+
+    # Lark SDK
+    "lark-oapi",
 ]
 
-[[tool.uv.index]]
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
-default = true
+# 切换到官方源，镜像源可能不稳定
+# [[tool.uv.index]]
+# url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+# default = true

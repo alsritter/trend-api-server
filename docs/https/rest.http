@@ -24,3 +24,13 @@ GET https://api.itapi.cn/api/hotnews/douyin?key=tX1YqbmsYJEtZJe7NSzCmhVuvZ
 ### B站热搜
 GET https://api.itapi.cn/api/hotnews/bilibili?key=tX1YqbmsYJEtZJe7NSzCmhVuvZ
 
+
+### 获取飞书多维表格数据
+POST {{baseUrl}}/api/v1/lark/bitable/records
+Content-Type: application/json
+
+{
+  "app_token": "IL6rbzj26adbKNs8eixc0Eo7nod",
+  "table_id": "tblFM02UJZlQmegw",
+  "page_size": 500
+}
